@@ -33,6 +33,40 @@ python manage.py migrate
 - Username : marouan
 - Email : marouanahoudi@gmail.com
 
+## Organisation GitHub
+
+- Nom : PresenceQRcode
+- Repo backend  : https://github.com/PresenceQRcode/BackEnd.git
+- Repo frontend : https://github.com/PresenceQRcode/FrontEnd.git
+
+## Membres
+
+- Marouan (toi) → backend-team → branche : feat/jwt-protection
+- Zaid          → backend-team → branche : feat/register-endpoint
+- Adil          → frontend-team
+- Mohamed       → frontend-team
+
+## Workflow Git
+
+### Avant de coder (chaque jour)
+git checkout main
+git pull origin main
+git checkout feat/ma-branche
+git merge main
+python manage.py runserver
+
+### Après avoir codé
+git status
+git add .
+git commit -m "feat: description"
+git push origin feat/ma-branche
+
+### Convention commits
+feat:     nouvelle fonctionnalité
+fix:      correction d'un bug
+refactor: amélioration du code
+docs:     modification du README
+
 ## État actuel
 
 - [x] Environnement virtuel créé
@@ -50,6 +84,13 @@ python manage.py migrate
 - [x] Serializers créés (gestion/serializers.py)
 - [x] API endpoints créés (gestion/views.py + gestion/urls.py)
 - [x] Authentification JWT (users/views.py + users/urls.py)
+- [x] Organisation GitHub créée (PresenceQRcode)
+- [x] Repo backend créé et pushé
+- [x] Repo frontend créé
+- [x] Teams créées (backend-team, frontend-team)
+- [x] README.md avec workflow documenté
+- [ ] Zaid : clone + branche feat/register-endpoint
+- [ ] Adil + Mohamed : invités dans l'organisation
 - [ ] Register endpoint
 - [ ] Protection des routes avec JWT
 - [ ] Génération QR Code
@@ -82,7 +123,7 @@ python manage.py migrate
 ## URLs
 
 - http://127.0.0.1:8000/admin/          → Admin Django
-- http://127.0.0.1:8000/api/            → API Root (tous les endpoints)
+- http://127.0.0.1:8000/api/            → API Root
 - http://127.0.0.1:8000/api/auth/login/ → Login JWT
 
 ## Endpoints API disponibles
@@ -115,6 +156,12 @@ python manage.py migrate
     }
 }
 
+## URL Flutter selon environnement
+
+- Émulateur Android  → http://10.0.2.2:8000/api/
+- Émulateur iOS      → http://127.0.0.1:8000/api/
+- Téléphone physique → http://0.0.0.0:8000/api/
+
 ## Fichiers importants
 
 - QRcode/settings.py      → Configuration principale
@@ -126,10 +173,13 @@ python manage.py migrate
 - gestion/admin.py        → Enregistrement admin
 - users/views.py          → Login JWT
 - users/urls.py           → URLs authentification
+- .env.example            → Template variables d'environnement
+- requirements.txt        → Dépendances Python
+- README.md               → Documentation + workflow Git
 
 ## Prochaine étape
 
 → Choisir parmi :
-   1. Register endpoint (créer etudiant/enseignant via API)
-   2. Protection des routes avec JWT
+   1. Register endpoint (Zaid) — créer etudiant/enseignant via API
+   2. Protection des routes avec JWT (Marouan)
    3. Génération QR Code (logique métier principale)
