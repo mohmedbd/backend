@@ -1,0 +1,24 @@
+# Environnement virtuel
+env/
+venv/
+
+# Base de données locale
+db.sqlite3
+
+# Variables sensibles
+.env
+
+# Python
+*.pyc
+*.pyo
+__pycache__/
+
+# VS Code
+.vscode/
+
+# Media (images QR Code générées)
+media/
+
+# Windows
+Thumbs.db
+desktop.ini
