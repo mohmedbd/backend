@@ -1,12 +1,3 @@
- # QRCode Backend
-
-API Django REST pour le système de présence par QR Code.
-
-## Stack technique
-- Django 6.0.4
-- Django REST Framework 3.17.1
-- JWT (djangorestframework-simplejwt 5.5.1)
-
 ## Installation (première fois)
 
 git clone https://github.com/PresenceQRcode/BackEnd.git
@@ -18,27 +9,6 @@ cp .env.example .env
 python manage.py migrate
 python manage.py createsuperuser
 python manage.py runserver
-
-## Avant de commencer à coder (chaque jour)
-
-git checkout main
-git pull origin main
-git checkout feat/ma-branche
-git merge main
-python manage.py runserver
-
-## Après avoir codé
-
-git status
-git add .
-git commit -m "feat: description"
-git push origin feat/ma-branche
-
-## Branches
-
-- main                    → code stable
-- feat/jwt-protection     → Marouan
-- feat/register-endpoint  → Zaid
 
 ## Endpoints disponibles
 
