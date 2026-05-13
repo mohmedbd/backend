@@ -3,7 +3,7 @@ from rest_framework.routers import DefaultRouter
 from .views import (
     FiliereViewSet, SalleViewSet, EnseignantViewSet,
     AdministrateurViewSet, EtudiantViewSet, PlanificationViewSet,
-    SeanceQRViewSet, QRCodeViewSet, PresenceViewSet
+    SeanceQRViewSet, QRCodeViewSet, PresenceViewSet,home
 )
 
 router = DefaultRouter()
@@ -19,4 +19,5 @@ router.register(r'presences', PresenceViewSet)
 
 urlpatterns = [
     path('', include(router.urls)),
+    path('/home', home),
 ]
