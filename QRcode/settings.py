@@ -11,15 +11,14 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
 from pathlib import Path
-
+import dj_database_url
+from decouple import config
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
-
-from decouple import config
 
 SECRET_KEY = config('SECRET_KEY', default='django-insecure-your-secret-key-change-this-in-production')
 DEBUG = config('DEBUG', cast=bool, default=False)
@@ -77,10 +76,12 @@ WSGI_APPLICATION = 'QRcode.wsgi.application'
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-    }
+    'default': dj_database_url.parse(
+        config(
+            'DATABASE_URL',
+            default='postgresql://neondb_owner:npg_OzXQMBR7yF2h@ep-nameless-unit-alxunnwm.c-3.eu-central-1.aws.neon.tech/neondb?sslmode=require'
+        )
+    )
 }
 
 
