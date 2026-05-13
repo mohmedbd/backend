@@ -1,5 +1,6 @@
 from rest_framework import viewsets
 from rest_framework.permissions import IsAuthenticated
+from django.http import HttpResponse
 from .models import (
     Filiere, Salle, Enseignant, Administrateur,
     Etudiant, Planification, SeanceQR, QRCode, Presence
@@ -50,6 +51,8 @@ class QRCodeViewSet(viewsets.ModelViewSet):
     queryset = QRCode.objects.all()
     serializer_class = QRCodeSerializer
 
+def home(request):
+    return HttpResponse("Render works!")
 
 class PresenceViewSet(viewsets.ModelViewSet):
     queryset = Presence.objects.all()
