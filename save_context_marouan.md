@@ -15,6 +15,9 @@
 - CORS headers 4.9.0
 - Pillow 12.2.0
 - Python-decouple 3.8
+- dj-database-url 3.1.2
+- psycopg2-binary 2.9.12
+- gunicorn 21.2.0 ← À ajouter dans requirements.txt
 
 ## Commandes importantes
 
@@ -27,6 +30,9 @@ python manage.py runserver
 # Migrations
 python manage.py makemigrations
 python manage.py migrate
+
+# Collecter les fichiers statiques (production)
+python manage.py collectstatic --no-input
 
 ## Superuser créé
 
@@ -41,8 +47,8 @@ python manage.py migrate
 
 ## Membres
 
-- Marouan (toi) → backend-team → branche : feat/jwt-protection
-- Zaid          → backend-team → branche : feat/register-endpoint
+- Marouan (toi) → backend-team → branche : feat/register-endpoint
+- Zaid          → backend-team → branche : feat/jwt-protection
 - Adil          → frontend-team
 - Mohamed       → frontend-team
 
@@ -89,10 +95,20 @@ docs:     modification du README
 - [x] Repo frontend créé
 - [x] Teams créées (backend-team, frontend-team)
 - [x] README.md avec workflow documenté
-- [ ] Zaid : clone + branche feat/register-endpoint
+- [x] Base de données migrée vers PostgreSQL (NeonDB)
+- [x] Settings adaptés pour la production (DEBUG, SECRET_KEY via .env)
+- [x] Vue /home ajoutée (health check Render)
+- [x] Tests de déploiement créés (tests.py)
+- [x] Register endpoint créé (etudiant/enseignant) — admin only
+- [x] Validation token JWT dans register (AccessToken)
+- [x] Vérification rôle admin dans register
+- [x] Vérification email/CIE unique dans register
+- [ ] gunicorn ajouté dans requirements.txt
+- [ ] STATIC_ROOT ajouté dans settings.py
+- [ ] Procfile créé
+- [ ] render.yaml créé (optionnel)
+- [ ] Zaid : Protection des routes avec JWT
 - [ ] Adil + Mohamed : invités dans l'organisation
-- [ ] Register endpoint
-- [ ] Protection des routes avec JWT
 - [ ] Génération QR Code
 
 ## Structure des apps
@@ -125,6 +141,8 @@ docs:     modification du README
 - http://127.0.0.1:8000/admin/          → Admin Django
 - http://127.0.0.1:8000/api/            → API Root
 - http://127.0.0.1:8000/api/auth/login/ → Login JWT
+- http://127.0.0.1:8000/api/auth/register/ → Register (admin only)
+- http://127.0.0.1:8000/home            → Health check Render
 
 ## Endpoints API disponibles
 
@@ -138,6 +156,7 @@ docs:     modification du README
 - GET/POST   api/qrcodes/
 - GET/POST   api/presences/
 - POST       api/auth/login/
+- POST       api/auth/register/   ← NOUVEAU (admin only)
 
 ## Login JWT — Réponse attendue
 
@@ -156,11 +175,50 @@ docs:     modification du README
     }
 }
 
+## Register — Body attendu
+
+### Etudiant
+{
+    "role": "etudiant",
+    "nom": "...",
+    "prenom": "...",
+    "email": "...",
+    "password": "...",
+    "CIE": "...",
+    "filier_etudiant": "..."
+}
+
+### Enseignant
+{
+    "role": "enseignant",
+    "nom": "...",
+    "prenom": "...",
+    "email": "...",
+    "password": "..."
+}
+
+Header obligatoire :
+    Authorization: Bearer <access_token_admin>
+
+## Base de données — Production
+
+- Provider : NeonDB (PostgreSQL)
+- URL : dans la variable d'environnement DATABASE_URL
+- Configurée via dj-database-url dans settings.py
+- Ne jamais committer la DATABASE_URL dans le code
+
+## Variables d'environnement (.env)
+
+- SECRET_KEY   → clé secrète Django
+- DEBUG        → True (local) / False (production)
+- DATABASE_URL → URL NeonDB PostgreSQL
+
 ## URL Flutter selon environnement
 
 - Émulateur Android  → http://10.0.2.2:8000/api/
 - Émulateur iOS      → http://127.0.0.1:8000/api/
 - Téléphone physique → http://0.0.0.0:8000/api/
+- Production Render  → https://<votre-app>.onrender.com/api/
 
 ## Fichiers importants
 
@@ -168,18 +226,23 @@ docs:     modification du README
 - QRcode/urls.py          → URLs principales
 - gestion/models.py       → Modèles Django
 - gestion/serializers.py  → Serializers DRF
-- gestion/views.py        → ViewSets API
+- gestion/views.py        → ViewSets API + vue home
 - gestion/urls.py         → URLs gestion
 - gestion/admin.py        → Enregistrement admin
-- users/views.py          → Login JWT
+- users/views.py          → Login JWT + Register (admin only)
 - users/urls.py           → URLs authentification
+- .env                    → Variables d'environnement (ne pas committer)
 - .env.example            → Template variables d'environnement
 - requirements.txt        → Dépendances Python
+- tests.py                → Tests de déploiement
+- Procfile                → Commande de démarrage (à créer)
 - README.md               → Documentation + workflow Git
 
 ## Prochaine étape
 
-→ Choisir parmi :
-   1. Register endpoint (Zaid) — créer etudiant/enseignant via API
-   2. Protection des routes avec JWT (Marouan)
-   3. Génération QR Code (logique métier principale)
+→ Finaliser le déploiement Render :
+   1. Ajouter gunicorn dans requirements.txt
+   2. Ajouter STATIC_ROOT dans settings.py
+   3. Créer le Procfile
+→ Attendre Zaid : Protection des routes avec JWT (feat/jwt-protection)
+→ Génération QR Code (logique métier principale)
