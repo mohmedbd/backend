@@ -3,6 +3,8 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework_simplejwt.tokens import RefreshToken , AccessToken
 from gestion.models import Administrateur, Etudiant, Enseignant
+from rest_framework.decorators import  permission_classes 
+from rest_framework.permissions import AllowAny                     
 
 
 def get_tokens_for_user(user_id, role):
@@ -16,6 +18,7 @@ def get_tokens_for_user(user_id, role):
 
 
 @api_view(['POST'])
+@permission_classes([AllowAny])
 def login(request):
     email = request.data.get('email')
     password = request.data.get('password')
