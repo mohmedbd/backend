@@ -21,7 +21,7 @@ python manage.py runserver
 - GET    /api/seances/
 - GET    /api/qrcodes/
 - GET    /api/presences/
-- POST   /api/auth/register/
+- POST   /api/auth/register/  -----> khas token d'acces admin bax ikhdm
 
 ## URL pour Flutter
 
