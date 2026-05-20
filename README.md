@@ -21,6 +21,7 @@ python manage.py runserver
 - GET    /api/seances/
 - GET    /api/qrcodes/
 - GET    /api/presences/
+- POST   /api/auth/register/
 
 ## URL pour Flutter
 
