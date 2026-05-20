@@ -1,4 +1,5 @@
 from django.db import models
+import uuid
 
 
 #1 Filière
@@ -72,9 +73,8 @@ class Planification(models.Model):
 
 #7 Séance QR
 class SeanceQR(models.Model):
-    filiere         = models.ForeignKey(Filiere, on_delete=models.CASCADE)
-    id_planification = models.ForeignKey(Planification, on_delete=models.CASCADE)
-    date            = models.DateField()
+    planification = models.ForeignKey(Planification, on_delete=models.CASCADE)
+    date          = models.DateField(auto_now_add=True)
 
     def __str__(self):
         return f"Séance {self.date}"
@@ -83,11 +83,17 @@ class SeanceQR(models.Model):
 #8 QR Code
 class QRCode(models.Model):
     seance     = models.ForeignKey(SeanceQR, on_delete=models.CASCADE)
-    expiration = models.TimeField()
+    token      = models.UUIDField(default=uuid.uuid4, unique=True)
+    cree_a = models.DateTimeField(auto_now_add=True)
+    expiration = models.IntegerField(default=1)  # minutes
+
+    def is_valid(self):
+        from django.utils import timezone
+        from datetime import timedelta
+        return timezone.now() < self.cree_a + timedelta(minutes=self.expiration)
 
     def __str__(self):
         return f"QR - Séance {self.seance}"
-
 
 #9 Présence
 class Presence(models.Model):

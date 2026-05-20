@@ -4,6 +4,9 @@ from rest_framework_simplejwt.authentication import JWTAuthentication
 from django.http import HttpResponse
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
+from rest_framework import status
+from django.utils import timezone
+from datetime import timedelta
 from .models import (
     Filiere, Salle, Enseignant, Administrateur,
     Etudiant, Planification, SeanceQR, QRCode, Presence
@@ -13,7 +16,7 @@ from .serializers import (
     AdministrateurSerializer, EtudiantSerializer, PlanificationSerializer,
     SeanceQRSerializer, QRCodeSerializer, PresenceSerializer
 )
-
+from rest_framework_simplejwt.tokens import AccessToken as AT
 class FiliereViewSet(viewsets.ModelViewSet):
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated]
@@ -67,6 +70,94 @@ class PresenceViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
     queryset = Presence.objects.all()
     serializer_class = PresenceSerializer
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def generer_seance_qr(request):
+    planification_id = request.data.get('planification_id')
+
+    if not planification_id:
+        return Response({'error': 'planification_id est requis'}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        planification = Planification.objects.get(id=planification_id)
+    except Planification.DoesNotExist:
+        return Response({'error': 'Planification introuvable'}, status=status.HTTP_404_NOT_FOUND)
+
+    auth_header = request.headers.get('Authorization', '')
+    try:
+        token = auth_header.split(' ')[1]
+        decoded = AT(token)
+        role = decoded.get('role')
+        user_id = decoded.get('user_id')
+    except Exception:
+        return Response({'error': 'Token invalide'}, status=status.HTTP_401_UNAUTHORIZED)
+
+    if role != 'enseignant':
+        return Response({'error': 'Accès réservé aux enseignants'}, status=status.HTTP_403_FORBIDDEN)
+
+    try:
+        enseignant = Enseignant.objects.get(id=user_id)
+    except Enseignant.DoesNotExist:
+        return Response({'error': 'Enseignant introuvable'}, status=status.HTTP_404_NOT_FOUND)
+
+    if planification.enseignant != enseignant:
+        return Response({'error': 'Cette planification ne vous appartient pas'}, status=status.HTTP_403_FORBIDDEN)
+
+    seance = SeanceQR.objects.create(planification=planification)
+    qrcode = QRCode.objects.create(seance=seance)
+
+    expire_dans = int((qrcode.cree_a + timedelta(minutes=qrcode.expiration) - timezone.now()).total_seconds())
+
+    return Response({
+        'seance_id': seance.id,
+        'token': str(qrcode.token),
+        'expire_dans': expire_dans
+    }, status=status.HTTP_201_CREATED)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_qrcode_seance(request, seance_id):
+    # Décoder le token pour vérifier le rôle
+    auth_header = request.headers.get('Authorization', '')
+    try:
+        token = auth_header.split(' ')[1]
+        decoded = AT(token)
+        role = decoded.get('role')
+        user_id = decoded.get('user_id')
+    except Exception:
+        return Response({'error': 'Token invalide'}, status=status.HTTP_401_UNAUTHORIZED)
+
+    if role != 'enseignant':
+        return Response({'error': 'Accès réservé aux enseignants'}, status=status.HTTP_403_FORBIDDEN)
+
+    try:
+        enseignant = Enseignant.objects.get(id=user_id)
+    except Enseignant.DoesNotExist:
+        return Response({'error': 'Enseignant introuvable'}, status=status.HTTP_404_NOT_FOUND)
+
+    try:
+        seance = SeanceQR.objects.get(id=seance_id)
+    except SeanceQR.DoesNotExist:
+        return Response({'error': 'Séance introuvable'}, status=status.HTTP_404_NOT_FOUND)
+
+    # Vérifier que la séance appartient bien à cet enseignant
+    if seance.planification.enseignant != enseignant:
+        return Response({'error': 'Cette séance ne vous appartient pas'}, status=status.HTTP_403_FORBIDDEN)
+
+    qrcode = QRCode.objects.filter(seance=seance).order_by('-cree_a').first()
+
+    if not qrcode or not qrcode.is_valid():
+        qrcode = QRCode.objects.create(seance=seance)
+
+    expire_dans = int((qrcode.cree_a + timedelta(minutes=qrcode.expiration) - timezone.now()).total_seconds())
+
+    return Response({
+        'token': str(qrcode.token),
+        'seance_id': seance.id,
+        'expire_dans': max(expire_dans, 0)
+    })
 
 @api_view(['GET'])
 @permission_classes([AllowAny])
