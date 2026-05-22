@@ -28,6 +28,7 @@ python manage.py runserver
 - GET    /api/qrcode/seance/{id}/   --->QR Code actuel de seance d id =xx
 - GET/POST    /api/qrcodes/         ---Liste / créer QR Codes
 - GET/POST    /api/presences/       ---Liste / créer présences
+- GET /api/planifications/aujourd-hui/  ---emploi du temps d'aujourd-hui 
 
 ## URL pour Flutter
 
