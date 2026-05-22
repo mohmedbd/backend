@@ -2,11 +2,13 @@ from rest_framework import viewsets
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from django.http import HttpResponse
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import api_view, permission_classes, authentication_classes
 from rest_framework.response import Response
 from rest_framework import status
 from django.utils import timezone
 from datetime import timedelta
+from rest_framework_simplejwt.tokens import AccessToken as AT
+
 from .models import (
     Filiere, Salle, Enseignant, Administrateur,
     Etudiant, Planification, SeanceQR, QRCode, Presence
@@ -16,7 +18,7 @@ from .serializers import (
     AdministrateurSerializer, EtudiantSerializer, PlanificationSerializer,
     SeanceQRSerializer, QRCodeSerializer, PresenceSerializer
 )
-from rest_framework_simplejwt.tokens import AccessToken as AT
+
 class FiliereViewSet(viewsets.ModelViewSet):
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated]
@@ -157,6 +159,66 @@ def get_qrcode_seance(request, seance_id):
         'token': str(qrcode.token),
         'seance_id': seance.id,
         'expire_dans': max(expire_dans, 0)
+    })
+
+
+# Planifications du jour
+JOURS_MAP = {
+    0: 'lundi',
+    1: 'mardi',
+    2: 'mercredi',
+    3: 'jeudi',
+    4: 'vendredi',
+    5: 'samedi',
+    6: 'dimanche',
+}
+
+@api_view(['GET'])
+@permission_classes([AllowAny]) 
+def planifications_du_jour(request):
+    auth_header = request.headers.get('Authorization', '')
+    if not auth_header.startswith('Bearer '):
+        return Response({'error': 'Token manquant'}, status=status.HTTP_401_UNAUTHORIZED)
+
+    token_str = auth_header.split(' ')[1]
+    try:
+        token = AT(token_str)
+        role  = token.get('role')
+    except Exception:
+        return Response({'error': 'Token invalide'}, status=status.HTTP_401_UNAUTHORIZED)
+
+    if role != 'enseignant':
+        return Response({'error': 'Accès réservé aux enseignants'}, status=status.HTTP_403_FORBIDDEN)
+
+    user_id = token.get('user_id')
+    try:
+        enseignant = Enseignant.objects.get(id=user_id)  # ← ici le fix
+    except Enseignant.DoesNotExist:
+        return Response({'error': 'Enseignant introuvable'}, status=status.HTTP_404_NOT_FOUND)
+
+    jour_actuel = JOURS_MAP[timezone.now().weekday()]
+
+    planifications = Planification.objects.filter(
+        enseignant=enseignant,
+        jour=jour_actuel
+    ).select_related('salle', 'filiere')
+
+    data = []
+    for p in planifications:
+        data.append({
+            'id':          p.id,
+            'salle':       str(p.salle),
+            'filiere':     str(p.filiere),
+            'heure_debut': str(p.heure_debut),
+            'heure_fin':   str(p.heure_fin),
+            'jour':        p.jour,
+        })
+
+    return Response({
+        'jour':           jour_actuel,
+        'date':           str(timezone.now().date()),
+        'planifications': data,
+        'total':          len(data),
     })
 
 @api_view(['GET'])
