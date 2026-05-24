@@ -28,7 +28,8 @@ python manage.py runserver
 - GET    /api/qrcode/seance/{id}/   --->QR Code actuel de seance d id =xx
 - GET/POST    /api/qrcodes/         ---Liste / créer QR Codes
 - GET/POST    /api/presences/       ---Liste / créer présences
-- GET /api/planifications/aujourd-hui/  ---emploi du temps d'aujourd-hui 
+- GET /api/planifications/aujourd-hui/  ---emploi du temps d'aujourd-hui
+- POST api/etudiants/verifier/          --- verfier la presence d'un etudiant dans la base de donnees
 
 ## body & response pour chaque api 
 
