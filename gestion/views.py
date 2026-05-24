@@ -221,6 +221,65 @@ def planifications_du_jour(request):
         'total':          len(data),
     })
 
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def verifier_etudiant(request):
+    data = request.data
+
+    cie    = data.get('CIE') or data.get('massar') or data.get('code_massar')
+    email  = data.get('email') or data.get('email_etudiant')
+    nom    = data.get('nom')   or data.get('nom_etudiant')
+    prenom = data.get('prenom') or data.get('prenom_etudiant')
+
+    if not cie and not email:
+        return Response(
+            {'error': 'CIE (Massar) ou email obligatoire pour la vérification'},
+            status=400
+        )
+
+    etudiant = None
+
+    # recherche par CIE (Massar)
+    if cie:
+        try:
+            etudiant = Etudiant.objects.get(CIE=cie)
+        except Etudiant.DoesNotExist:
+            pass
+
+    # recherche par email si CIE non trouvé
+    if not etudiant and email:
+        try:
+            etudiant = Etudiant.objects.get(email_etudiant=email)
+        except Etudiant.DoesNotExist:
+            pass
+
+    if not etudiant:
+        return Response({
+            'found': False,
+            'message': 'Étudiant introuvable dans le système',
+            'recherche': {
+                'CIE': cie,
+                'email': email,
+                'nom': nom,
+                'prenom': prenom,
+            }
+        }, status=404)
+
+    # Étudiant trouvé → retourner ses données
+    return Response({
+        'found': True,
+        'message': f'Étudiant trouvé : {etudiant.prenom_etudiant} {etudiant.nom_etudiant}',
+        'etudiant': {
+            'id':       etudiant.id,
+            'nom':      etudiant.nom_etudiant,
+            'prenom':   etudiant.prenom_etudiant,
+            'email':    etudiant.email_etudiant,
+            'CIE':      etudiant.CIE,
+            'filiere':  etudiant.filier_etudiant,
+        }
+    }, status=200)
+
+
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def home(request):

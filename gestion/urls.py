@@ -6,6 +6,7 @@ from .views import (
     AdministrateurViewSet, EtudiantViewSet, PlanificationViewSet,
     SeanceQRViewSet, QRCodeViewSet, PresenceViewSet
 )
+from .views import verifier_etudiant
 
 router = DefaultRouter()
 router.register(r'filieres', FiliereViewSet)
@@ -22,5 +23,6 @@ urlpatterns = [
     path('seances/generer/', generer_seance_qr, name='generer-seance-qr'),
     path('qrcode/seance/<int:seance_id>/', get_qrcode_seance, name='get-qrcode-seance'),
     path('planifications/aujourd-hui/', planifications_du_jour, name='planifications-jour'),
+    path('etudiants/verifier/', verifier_etudiant, name='verifier-etudiant'),
     path('', include(router.urls)),
 ]
