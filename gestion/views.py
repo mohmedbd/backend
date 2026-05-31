@@ -279,6 +279,67 @@ def verifier_etudiant(request):
         }
     }, status=200)
 
+@api_view(['GET'])
+def liste_presences_seance(request, seance_id):
+    
+    import jwt
+    from django.conf import settings
+
+    # Vérifier le token JWT et extraire le rôle
+    auth_header = request.headers.get('Authorization', '')
+    if not auth_header.startswith('Bearer '):
+        return Response({'error': 'Token manquant'}, status=401)
+
+    token_str = auth_header.split(' ')[1]
+    try:
+        payload = jwt.decode(token_str, settings.SECRET_KEY, algorithms=['HS256'])
+    except jwt.ExpiredSignatureError:
+        return Response({'error': 'Token expiré'}, status=401)
+    except jwt.InvalidTokenError:
+        return Response({'error': 'Token invalide'}, status=401)
+
+    if payload.get('role') != 'enseignant':
+        return Response({'error': 'Accès réservé aux enseignants'}, status=403)
+
+    enseignant_id = payload.get('user_id')
+
+    # Récupérer la séance
+    try:
+        seance = SeanceQR.objects.get(id=seance_id)
+    except SeanceQR.DoesNotExist:
+        return Response({'error': 'Séance introuvable'}, status=404)
+
+    # Vérifier que la planification appartient bien à cet enseignant
+    if seance.planification.enseignant.id != enseignant_id:
+        return Response({'error': 'Accès non autorisé à cette séance'}, status=403)
+
+    # Récupérer toutes les présences de cette séance
+    presences = Presence.objects.filter(seance=seance).select_related('etudiant')
+
+    data = {
+        "seance_id": seance.id,
+        "date": str(seance.date),
+        "planification": {
+            "filiere": seance.planification.filiere.nom_filiere,
+            "salle": seance.planification.salle.nom_salle,
+            "heure_debut": str(seance.planification.heure_debut),
+            "heure_fin": str(seance.planification.heure_fin),
+        },
+        "total_presents": presences.count(),
+        "presences": [
+            {
+                "nom": p.etudiant.nom_etudiant,
+                "prenom": p.etudiant.prenom_etudiant,
+                "CIE": p.etudiant.CIE,
+                "heure_scan": str(p.heure_scan),
+                "date_scan": str(p.date_scan),
+            }
+            for p in presences
+        ]
+    }
+
+    return Response(data, status=200)
+
 
 @api_view(['GET'])
 @permission_classes([AllowAny])

@@ -30,6 +30,7 @@ python manage.py runserver
 - GET/POST    /api/presences/       ---Liste / créer présences
 - GET /api/planifications/aujourd-hui/  ---emploi du temps d'aujourd-hui
 - POST api/etudiants/verifier/          --- verfier la presence d'un etudiant dans la base de donnees
+- GET    /api/seances/{id}/presences/   --- pour recupirer la liste des presence actuel 
 
 ## body & response pour chaque api 
 
@@ -244,3 +245,18 @@ Réponse :
         "filiere": "SDIA"
     }
 }
+==================================================================
+GET /api/seances/{id}/presences/     ici id == 3 
+Réponse : {
+    "seance_id": 3,
+    "date": "2026-05-20",
+    "planification": {
+        "filiere": "SDIA",
+        "salle": "2.2",
+        "heure_debut": "08:00:00",
+        "heure_fin": "12:00:00"
+    },
+    "total_presents": 0,
+    "presences": []
+}
+=====================================================================
