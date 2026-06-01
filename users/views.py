@@ -2,7 +2,7 @@ from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework_simplejwt.tokens import RefreshToken , AccessToken
-from gestion.models import Administrateur, Etudiant, Enseignant
+from gestion.models import Administrateur, Etudiant, Enseignant, Filiere
 from rest_framework.decorators import  permission_classes 
 from rest_framework.permissions import AllowAny                     
 
@@ -111,10 +111,21 @@ def register(request):
         CIE = request.data.get('CIE')
         filier = request.data.get('filier_etudiant')
         if not CIE or not filier:
-            return Response({'status': 'error', 'message': 'CIE et filier_etudiant obligatoires'}, status=status.HTTP_400_BAD_REQUEST)
-        if Etudiant.objects.filter(email_etudiant=email).exists():
-            return Response({'status': 'error', 'message': 'Email déjà utilisé'}, status=status.HTTP_400_BAD_REQUEST)
-        Etudiant.objects.create(nom_etudiant=nom, prenom_etudiant=prenom, email_etudiant=email, password_etudiant=password, filier_etudiant=filier, CIE=CIE)
+            return Response({'status': 'error', 'message': 'CIE et filier_etudiant obligatoires'}, status=400)
+
+        try:
+            filiere_obj = Filiere.objects.get(id=filier)
+        except Filiere.DoesNotExist:
+            return Response({'status': 'error', 'message': 'Filière introuvable'}, status=400)
+
+        Etudiant.objects.create(
+            nom_etudiant=nom,
+            prenom_etudiant=prenom,
+            email_etudiant=email,
+            password_etudiant=password,
+            filier_etudiant=filiere_obj,
+            CIE=CIE
+        )
 
     elif role == 'enseignant':
         if Enseignant.objects.filter(email_enseignant=email).exists():

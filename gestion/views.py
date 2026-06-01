@@ -192,7 +192,7 @@ def planifications_du_jour(request):
 
     user_id = token.get('user_id')
     try:
-        enseignant = Enseignant.objects.get(id=user_id)  # ← ici le fix
+        enseignant = Enseignant.objects.get(id=user_id)
     except Enseignant.DoesNotExist:
         return Response({'error': 'Enseignant introuvable'}, status=status.HTTP_404_NOT_FOUND)
 
@@ -340,6 +340,120 @@ def liste_presences_seance(request, seance_id):
 
     return Response(data, status=200)
 
+
+import jwt
+import openpyxl
+from django.conf import settings
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def export_seance_excel(request, seance_id):
+
+    # Décoder le token JWT
+    try:
+        raw_token     = request.headers.get('Authorization', '').split(' ')[1]
+        payload       = jwt.decode(raw_token, settings.SECRET_KEY, algorithms=['HS256'])
+        enseignant_id = payload.get('user_id')
+        role          = payload.get('role')
+    except Exception:
+        return Response({'error': 'Token invalide'}, status=401)
+
+    if role != 'enseignant':
+        return Response({'error': 'Accès réservé aux enseignants'}, status=403)
+
+    # Récupérer la séance
+    try:
+        seance = SeanceQR.objects.select_related(
+            'planification__enseignant',
+            'planification__filiere',
+            'planification__salle'
+        ).get(id=seance_id)
+    except SeanceQR.DoesNotExist:
+        return Response({'error': 'Séance introuvable'}, status=404)
+
+    # Vérifier que la séance appartient à cet enseignant
+    if seance.planification.enseignant.id != enseignant_id:
+        return Response({'error': 'Accès non autorisé à cette séance'}, status=403)
+
+    # Récupérer tous les étudiants de la filière
+    filiere        = seance.planification.filiere
+    tous_etudiants = Etudiant.objects.filter(
+        filier_etudiant=filiere
+    ).order_by('nom_etudiant', 'prenom_etudiant')
+
+    # Récupérer les CIE des étudiants présents
+    presents_cie = set(
+        Presence.objects.filter(seance=seance)
+        .values_list('etudiant__CIE', flat=True)
+    )
+
+    # Construire le fichier Excel
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = f"Séance {seance_id}"
+
+    # Styles
+    from openpyxl.styles import Font, PatternFill, Alignment
+
+    style_titre  = Font(bold=True, size=12)
+    fill_present = PatternFill(start_color="C6EFCE", end_color="C6EFCE", fill_type="solid")  
+    fill_absent  = PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid")  
+    fill_header  = PatternFill(start_color="BDD7EE", end_color="BDD7EE", fill_type="solid")  
+    bold         = Font(bold=True)
+
+    # Infos séance
+    ws.append(['Filière',   filiere.nom_filiere])
+    ws.append(['Salle',     str(seance.planification.salle)])
+    ws.append(['Date',      str(seance.date)])
+    ws.append(['Semestre',  seance.planification.semestre])
+    ws.append([])  
+
+    for row in ws.iter_rows(min_row=1, max_row=4):
+        row[0].font = style_titre
+
+    # En-têtes colonnes
+    header_row = ['N°', 'Nom', 'Prénom', 'CIE', 'Présence']
+    ws.append(header_row)
+
+    header_excel_row = ws.max_row
+    for cell in ws[header_excel_row]:
+        cell.font      = bold
+        cell.fill      = fill_header
+        cell.alignment = Alignment(horizontal='center')
+
+    # Données : tous les étudiants
+    for i, etudiant in enumerate(tous_etudiants, start=1):
+        est_present = etudiant.CIE in presents_cie
+        statut      = 'Présent' if est_present else 'Absent'
+
+        ws.append([
+            i,
+            etudiant.nom_etudiant,
+            etudiant.prenom_etudiant,
+            etudiant.CIE,
+            statut,
+        ])
+
+        # Colorier la cellule Présence
+        statut_cell      = ws.cell(row=ws.max_row, column=5)
+        statut_cell.fill = fill_present if est_present else fill_absent
+        statut_cell.alignment = Alignment(horizontal='center')
+
+    # Ajuster largeur colonnes
+    ws.column_dimensions['A'].width = 5
+    ws.column_dimensions['B'].width = 20
+    ws.column_dimensions['C'].width = 20
+    ws.column_dimensions['D'].width = 15
+    ws.column_dimensions['E'].width = 12
+
+    # 7. Retourner la réponse HTTP
+    filename = f"presences_seance_{seance_id}_{seance.date}.xlsx"
+    response = HttpResponse(
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    wb.save(response)
+    return response
 
 @api_view(['GET'])
 @permission_classes([AllowAny])

@@ -50,12 +50,12 @@ class Etudiant(models.Model):
     prenom_etudiant   = models.CharField(max_length=30)
     email_etudiant    = models.EmailField(unique=True)
     password_etudiant = models.CharField(max_length=128)
-    filier_etudiant   = models.CharField(max_length=30)
+    filier_etudiant   = models.ForeignKey(   # ← FK maintenant
+        Filiere,
+        on_delete=models.SET_NULL,
+        null=True
+    )
     CIE               = models.CharField(max_length=30, unique=True)
-
-    def __str__(self):
-        return f"{self.prenom_etudiant} {self.nom_etudiant}"
-
 
 #6 Planification
 class Planification(models.Model):

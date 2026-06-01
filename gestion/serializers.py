@@ -30,8 +30,10 @@ class AdministrateurSerializer(serializers.ModelSerializer):
 
 
 class EtudiantSerializer(serializers.ModelSerializer):
+    filier_etudiant_nom = serializers.StringRelatedField(source='filier_etudiant', read_only=True)
+
     class Meta:
-        model = Etudiant
+        model  = Etudiant
         fields = '__all__'
 
 

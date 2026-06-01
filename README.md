@@ -28,10 +28,10 @@ python manage.py runserver
 - GET    /api/qrcode/seance/{id}/   --->QR Code actuel de seance d id =xx
 - GET/POST    /api/qrcodes/         ---Liste / créer QR Codes
 - GET/POST    /api/presences/       ---Liste / créer présences
-- GET /api/planifications/aujourd-hui/  ---emploi du temps d'aujourd-hui
-- POST api/etudiants/verifier/          --- verfier la presence d'un etudiant dans la base de donnees
-- GET    /api/seances/{id}/presences/   --- pour recupirer la liste des presence actuel 
-
+- GET    /api/planifications/aujourd-hui/   ---emploi du temps d'aujourd-hui
+- POST    /api/etudiants/verifier/          --- verfier la presence d'un etudiant dans la base de donnees
+- GET    /api/seances/{id}/presences/       --- pour recupirer la liste des presence actuel 
+- GET    /api/seances/1/export/             --- pour exportation fichier excel (accesible par le prof)
 ## body & response pour chaque api 
 
 ===============================================
@@ -56,18 +56,25 @@ Réponse :
 ===============================================
 POST /api/auth/register/
 Body :
-{ 
-"email": "etudiant@fsmek.ma",
-"password": "motdepasse123",
- "nom": "Alaoui",
- "prenom": "Sara",
- "role": "etudiant",
- "CIE": "P123456"
+{
+    "role": "etudiant",
+    "nom": "Benali",
+    "prenom": "Youssef",
+    "email": "youssef.benali@gmail.com",
+    "password": "test1234",
+    "CIE": "C789012",
+    "filier_etudiant": 1   ici c'est  l'id de filliere SDIA
 }
 Réponse:
 {"status": "success",
  "message": "Compte créé avec succès"
 }
+
+exemple de formulaire : 
+<select name="filier_etudiant">
+    <option value="1">SDIA</option>
+    <option value="2">ISOC</option>
+</select>
 
 
 ===============================================
