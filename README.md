@@ -72,8 +72,8 @@ Réponse:
 
 exemple de formulaire : 
 <select name="filier_etudiant">
-    option value="1">SDIA</option>
-    option value="2">ISOC</option>
+    <option value="1">SDIA</option>
+    <option value="2">ISOC</option>
 </select>
 
 
