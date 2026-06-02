@@ -29,9 +29,11 @@ python manage.py runserver
 - GET/POST    /api/qrcodes/         ---Liste / créer QR Codes
 - GET/POST    /api/presences/       ---Liste / créer présences
 - GET    /api/planifications/aujourd-hui/   ---emploi du temps d'aujourd-hui
-- POST    /api/etudiants/verifier/          --- verfier la presence d'un etudiant dans la base de donnees
+- POST   /api/etudiants/verifier/           --- verfier la presence d'un etudiant dans la base de donnees
 - GET    /api/seances/{id}/presences/       --- pour recupirer la liste des presence actuel 
 - GET    /api/seances/1/export/             --- pour exportation fichier excel (accesible par le prof)
+- POST   /api/presences/scanner/            -- pour scanner le code QR 
+
 ## body & response pour chaque api 
 
 ===============================================
@@ -266,4 +268,34 @@ Réponse : {
     "total_presents": 0,
     "presences": []
 }
+
 =====================================================================
+GET /api/seances/1/export/
+Header : Authorization: Bearer <token_enseignant>
+
+→ Télécharge le fichier : presences_seance_1_2026-05-22.xlsx
+
+
+=====================================================================
+POST /api/presences/scanner/
+Body :
+{
+    "token": "uuid-qrcode",
+    "CIE": "M33333",
+    "nom": "ahodi",
+    "prenom": "haytham"
+}
+Réponse :
+{
+    "found": true,
+    "message": "Étudiant trouvé : ahodi haytham",
+    "etudiant": {
+        "id": 15,
+        "nom": "haytham",
+        "prenom": "ahodi",
+        "email": "haytham@mail.com",
+        "CIE": "M33333",
+        "filiere": "SDIA"
+    }
+}
+==================================================================

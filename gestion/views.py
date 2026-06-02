@@ -455,6 +455,56 @@ def export_seance_excel(request, seance_id):
     wb.save(response)
     return response
 
+from django.utils import timezone
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def scanner_presence(request):
+    token_uuid = request.data.get('token')
+    cie        = request.data.get('CIE')
+    nom        = request.data.get('nom')
+    prenom     = request.data.get('prenom')
+
+    if not all([token_uuid, cie]):
+        return Response({'error': 'token et CIE obligatoires'}, status=400)
+
+    # Récupérer le QRCode
+    try:
+        qrcode = QRCode.objects.get(token=token_uuid)
+    except QRCode.DoesNotExist:
+        return Response({'error': 'QR Code invalide'}, status=404)
+
+    # Vérifier validité
+    if not qrcode.is_valid():
+        return Response({'error': 'QR Code expiré'}, status=400)
+
+    # Récupérer l'étudiant via CIE
+    try:
+        etudiant = Etudiant.objects.get(CIE=cie)
+    except Etudiant.DoesNotExist:
+        return Response({'error': 'CIE introuvable'}, status=404)
+
+    # Anti-doublon
+    seance = qrcode.seance
+    if Presence.objects.filter(etudiant=etudiant, seance=seance).exists():
+        return Response({'error': 'Présence déjà enregistrée'}, status=400)
+
+    # Enregistrer la présence
+    now = timezone.now()
+    Presence.objects.create(
+        etudiant=etudiant,
+        seance=seance,
+        date_scan=now.date(),
+        heure_scan=now.time(),
+    )
+
+    return Response({
+        'status': 'success',
+        'message': f'Présence enregistrée pour {etudiant.prenom_etudiant} {etudiant.nom_etudiant}',
+        'heure': str(now.time())[:8],
+    })
+
+
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def home(request):
