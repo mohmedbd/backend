@@ -254,6 +254,7 @@ Réponse :
         "filiere": "SDIA"
     }
 }
+
 ==================================================================
 GET /api/seances/{id}/presences/     ici id == 3 
 Réponse : {
@@ -291,4 +292,5 @@ Réponse :
     "message": "Présence enregistrée pour Haytham Ahodi",
     "heure": "10:48:32"
 }
+
 ==================================================================
