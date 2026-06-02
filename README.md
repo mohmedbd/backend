@@ -1,15 +1,3 @@
-## Installation (première fois)
-
-git clone https://github.com/PresenceQRcode/BackEnd.git
-cd BackEnd
-python -m venv env
-env\Scripts\Activate
-pip install -r requirements.txt
-cp .env.example .env
-python manage.py migrate
-python manage.py createsuperuser
-python manage.py runserver
-
 # Présence API — FSMeK
 
 Système de gestion des présences par QR Code pour la Faculté des Sciences de Meknès.
@@ -117,9 +105,10 @@ Ordre d'utilisation typique par un enseignant :
 1. GET  /api/planifications/aujourd-hui/   → récupérer la planification du jour
 2. POST /api/seances/generer/              → créer la séance + premier QR Code
 3. GET  /api/qrcode/seance/{id}/          → rafraîchir le QR Code (toutes les ~60s)
-4. POST /api/presences/scanner/            → les étudiants scannent le QR
-5. GET  /api/seances/{id}/presences/      → consulter la liste des présents
-6. GET  /api/seances/{id}/export/         → exporter en Excel
+4. POST /api/etudiants/verifier/           → vérifier l'étudiant avant de scanner
+5. POST /api/presences/scanner/            → les étudiants scannent le QR
+6. GET  /api/seances/{id}/presences/      → consulter la liste des présents
+7. GET  /api/seances/{id}/export/         → exporter en Excel
 ```
 
 ---
@@ -181,40 +170,6 @@ Récupère le QR Code actuel d'une séance (se renouvelle automatiquement).
   "token": "nouveau-uuid-...",
   "seance_id": 1,
   "expire_dans": 45
-}
-```
-
----
-
-### `POST /api/etudiants/verifier/`
-
-Vérifie l'existence d'un étudiant dans la base de données avant de scanner.
-
-**Body**
-```json
-{
-  "CIE": "M33333",
-  "nom": "haytham",
-  "prenom": "ahodi",
-  "email": "haytham@mail.com",
-  "filiere": "SDIA",
-  "password": "12345678"
-}
-```
-
-**Réponse `200`**
-```json
-{
-  "found": true,
-  "message": "Étudiant trouvé : ahodi haytham",
-  "etudiant": {
-    "id": 15,
-    "nom": "haytham",
-    "prenom": "ahodi",
-    "email": "haytham@mail.com",
-    "CIE": "M33333",
-    "filiere": "SDIA"
-  }
 }
 ```
 
@@ -283,7 +238,46 @@ Retourne la liste des présences enregistrées pour une séance.
 
 Télécharge la feuille de présences au format Excel.
 
+**Header requis**
+```
+Authorization: Bearer <token_enseignant>
+```
+
 **Réponse** : fichier `presences_seance_{id}_{date}.xlsx`
+
+---
+
+### `POST /api/etudiants/verifier/`
+
+Vérifie l'existence d'un étudiant dans la base de données (utilisé avant le scan).
+
+**Body**
+```json
+{
+  "CIE": "M33333",
+  "nom": "haytham",
+  "prenom": "ahodi",
+  "email": "haytham@mail.com",
+  "filiere": "SDIA",
+  "password": "12345678"
+}
+```
+
+**Réponse `200`**
+```json
+{
+  "found": true,
+  "message": "Étudiant trouvé : ahodi haytham",
+  "etudiant": {
+    "id": 15,
+    "nom": "haytham",
+    "prenom": "ahodi",
+    "email": "haytham@mail.com",
+    "CIE": "M33333",
+    "filiere": "SDIA"
+  }
+}
+```
 
 ---
 
