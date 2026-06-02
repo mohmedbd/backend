@@ -275,7 +275,7 @@ def verifier_etudiant(request):
             'prenom':   etudiant.prenom_etudiant,
             'email':    etudiant.email_etudiant,
             'CIE':      etudiant.CIE,
-            'filiere':  etudiant.filier_etudiant,
+            'filiere':  etudiant.filier_etudiant.nom_filiere if etudiant.filier_etudiant else None,
         }
     }, status=200)
 
