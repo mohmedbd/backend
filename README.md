@@ -287,15 +287,8 @@ Body :
 }
 Réponse :
 {
-    "found": true,
-    "message": "Étudiant trouvé : ahodi haytham",
-    "etudiant": {
-        "id": 15,
-        "nom": "haytham",
-        "prenom": "ahodi",
-        "email": "haytham@mail.com",
-        "CIE": "M33333",
-        "filiere": "SDIA"
-    }
+    "status": "success",
+    "message": "Présence enregistrée pour Haytham Ahodi",
+    "heure": "10:48:32"
 }
 ==================================================================
