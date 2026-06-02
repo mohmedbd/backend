@@ -10,287 +10,475 @@ python manage.py migrate
 python manage.py createsuperuser
 python manage.py runserver
 
-## Endpoints disponibles
+# Présence API — FSMeK
 
-- GET   /home
-- POST   /api/auth/login/
-- GET/POST    /api/filieres/          ---Liste / créer filières
-- GET/POST    /api/salles/            ---Liste / créer salles
-- GET/POST    /api/enseignants/       ---Liste / créer enseignants
-- GET/POST    /api/etudiants/         ---Liste / créer étudiants
-- GET/POST    /api/administrateurs/   ---Liste / créer admins
-- GET/POST    /api/planifications/    ---Liste / créer planifications
-- GET/POST    /api/seances/           ---Liste / créer séances
-- GET    /api/qrcodes/
-- GET    /api/presences/
-- POST   /api/auth/register/  -----> khas token d'acces admin bax ikhdm
-- POST   /api/seances/generer/      --->Créer séance + premier QR Code 
-- GET    /api/qrcode/seance/{id}/   --->QR Code actuel de seance d id =xx
-- GET/POST    /api/qrcodes/         ---Liste / créer QR Codes
-- GET/POST    /api/presences/       ---Liste / créer présences
-- GET    /api/planifications/aujourd-hui/   ---emploi du temps d'aujourd-hui
-- POST   /api/etudiants/verifier/           --- verfier la presence d'un etudiant dans la base de donnees
-- GET    /api/seances/{id}/presences/       --- pour recupirer la liste des presence actuel 
-- GET    /api/seances/1/export/             --- pour exportation fichier excel (accesible par le prof)
-- POST   /api/presences/scanner/            -- pour scanner le code QR 
+Système de gestion des présences par QR Code pour la Faculté des Sciences de Meknès.
 
-## body & response pour chaque api 
+---
 
-===============================================
-POST /api/auth/login/
-Body :
+## Table des matières
+
+- [Informations générales](#informations-générales)
+- [Authentification](#authentification)
+- [Workflow séance & présences](#workflow-séance--présences)
+- [Ressources CRUD](#ressources-crud)
+  - [Filières](#filières)
+  - [Salles](#salles)
+  - [Enseignants](#enseignants)
+  - [Étudiants](#étudiants)
+  - [Administrateurs](#administrateurs)
+  - [Planifications](#planifications)
+  - [Séances](#séances)
+  - [QR Codes](#qr-codes)
+  - [Présences](#présences)
+
+---
+
+## Informations générales
+
+| Propriété | Valeur |
+|-----------|--------|
+| Format | `application/json` |
+| Authentification | `Authorization: Bearer <access_token>` |
+| Expiration QR Code | 60 secondes (renouvelé automatiquement) |
+
+---
+
+## Authentification
+
+### `POST /api/auth/login/`
+
+Connexion d'un utilisateur (enseignant, étudiant ou admin).
+
+**Body**
+```json
 {
-"email": "prof@fsmek.ma",
- "password": "motdepasse123"
+  "email": "prof@fsmek.ma",
+  "password": "motdepasse123"
 }
-Réponse :
-{
-"status": "success",
- "role": "enseignant",
- "tokens": {"refresh": "eyJ...",
- "access": "eyJ..."},
- "user": {"id": 1,
-	 "email": "prof@fsmek.ma",
-	 "nom": "Benali",
-	 "prenom": "Karim"
-}}
+```
 
-===============================================
-POST /api/auth/register/
-Body :
+**Réponse `200`**
+```json
 {
-    "role": "etudiant",
+  "status": "success",
+  "role": "enseignant",
+  "tokens": {
+    "refresh": "eyJ...",
+    "access": "eyJ..."
+  },
+  "user": {
+    "id": 1,
+    "email": "prof@fsmek.ma",
     "nom": "Benali",
-    "prenom": "Youssef",
-    "email": "youssef.benali@gmail.com",
-    "password": "test1234",
-    "CIE": "C789012",
-    "filier_etudiant": 1   ici c'est  l'id de filliere SDIA
+    "prenom": "Karim"
+  }
 }
-Réponse:
-{"status": "success",
- "message": "Compte créé avec succès"
-}
+```
 
-exemple de formulaire : 
-<select name="filier_etudiant">
-    <option value="1">SDIA</option>
-    <option value="2">ISOC</option>
-</select>
+---
 
+### `POST /api/auth/register/`
 
-===============================================
-GET /api/planifications/aujourd-hui/
-Body : aucun
-Réponse :
+> 🔒 Requiert un token d'accès admin.
+
+Créer un nouveau compte utilisateur.
+
+**Body**
+```json
 {
-"jour": "vendredi",
- "date": "2026-05-22",
- "planifications": [{
-	"id": 4,
-	 "salle": "2.2",
-	 "filiere": "SDIA",
-	 "heure_debut": "10:42:15",
-	 "heure_fin": "11:42:15",
-	 "jour": "vendredi"
-	}],
- "total": 1
+  "role": "etudiant",
+  "nom": "Benali",
+  "prenom": "Youssef",
+  "email": "youssef.benali@gmail.com",
+  "password": "test1234",
+  "CIE": "C789012",
+  "filier_etudiant": 1
 }
+```
 
-===============================================
-POST /api/seances/generer/
-Body :
-{"planification_id": 4}
-Réponse :
+> `filier_etudiant` est l'`id` de la filière (ex: `1` pour SDIA).
+
+**Réponse `200`**
+```json
 {
-"seance_id": 1,
- "token": "550e8400-e29b-41d4-a716-446655440000",
- "expire_dans": 60
+  "status": "success",
+  "message": "Compte créé avec succès"
 }
+```
 
-===============================================
-GET /api/qrcode/seance/{id}/             ex: /api/qrcode/seance/1/
-Body : aucun
-Réponse :
+---
+
+## Workflow séance & présences
+
+Ordre d'utilisation typique par un enseignant :
+
+```
+1. GET  /api/planifications/aujourd-hui/   → récupérer la planification du jour
+2. POST /api/seances/generer/              → créer la séance + premier QR Code
+3. GET  /api/qrcode/seance/{id}/          → rafraîchir le QR Code (toutes les ~60s)
+4. POST /api/presences/scanner/            → les étudiants scannent le QR
+5. GET  /api/seances/{id}/presences/      → consulter la liste des présents
+6. GET  /api/seances/{id}/export/         → exporter en Excel
+```
+
+---
+
+### `GET /api/planifications/aujourd-hui/`
+
+Retourne l'emploi du temps du jour courant.
+
+**Réponse `200`**
+```json
 {
-"token": "nouveau-uuid-...",
- "seance_id": 1,
- "expire_dans": 45
+  "jour": "vendredi",
+  "date": "2026-05-22",
+  "planifications": [
+    {
+      "id": 4,
+      "salle": "2.2",
+      "filiere": "SDIA",
+      "heure_debut": "10:42:15",
+      "heure_fin": "11:42:15",
+      "jour": "vendredi"
+    }
+  ],
+  "total": 1
 }
+```
 
-===============================================
-POST /api/presences/scanner/
-Body :
+---
+
+### `POST /api/seances/generer/`
+
+Crée une séance à partir d'une planification et génère le premier QR Code.
+
+**Body**
+```json
 {
-"token": "550e8400-e29b-41d4-a716-446655440000",
- "CIE": "P123456",
- "nom": "Alaoui",
- "prenom": "Sara"
+  "planification_id": 4
 }
-Réponse :
+```
+
+**Réponse `200`**
+```json
 {
-"status": "success", 
-"message": "Présence enregistrée pour Sara Alaoui", 
-"heure": "10:47:32"
+  "seance_id": 1,
+  "token": "550e8400-e29b-41d4-a716-446655440000",
+  "expire_dans": 60
 }
+```
 
-Erreurs possibles :
-400 {"error": "token et CIE obligatoires"}
-400 {"error": "QR Code expiré"}
-400 {"error": "Présence déjà enregistrée"}
-404 {"error": "QR Code invalide"}
-404 {"error": "CIE introuvable"}
+---
 
-===================================================================
-GET /api/etudiants/ 
-Body : aucun
-Réponse :
-[{
-"id": 1, 
-"nom_etudiant": "Alaoui", 
-"prenom_etudiant": "Sara", 
-"CIE": "P123456", 
-"filiere": 1
-}]
+### `GET /api/qrcode/seance/{id}/`
 
-==========================================================
-POST /api/etudiants/
-Body : {"nom_etudiant": "Alaoui", "prenom_etudiant": "Sara", "CIE": "P123456", "filiere": 1}
-Réponse 201 : {"id": 1, "nom_etudiant": "Alaoui", "prenom_etudiant": "Sara", "CIE": "P123456", "filiere": 1}
+Récupère le QR Code actuel d'une séance (se renouvelle automatiquement).
 
-============================================================
-GET /api/filieres/
-Réponse : [{"id": 1, "nom_filiere": "SDIA"}]
-
-=========================================================
-POST /api/filieres/
-Body : {"nom_filiere": "SDIA"}
-Réponse 201 : {"id": 1, "nom_filiere": "SDIA"}
-
-================================================================
-GET /api/salles/
-Réponse : [{"id": 1, "nom_salle": "2.2"}]
-
-=================================================================
-POST /api/salles/
-Body : {"nom_salle": "2.2"}
-Réponse 201 : {"id": 1, "nom_salle": "2.2"}
-
-=================================================================
-GET /api/enseignants/
-Réponse : [{"id": 1, "nom_enseignant": "Benali", "prenom_enseignant": "Karim", "email": "prof@fsmek.ma"}]
-
-==================================================================
-POST /api/enseignants/
-Body : {"nom_enseignant": "Benali", "prenom_enseignant": "Karim", "email": "prof@fsmek.ma"}
-Réponse 201 : {"id": 1, "nom_enseignant": "Benali", "prenom_enseignant": "Karim", "email": "prof@fsmek.ma"}
-
-======================================================================
-GET /api/administrateurs/
-Réponse : [{"id": 1, "nom_admin": "Idrissi", "prenom_admin": "Omar", "email": "admin@fsmek.ma"}]
-
-=========================================================================
-POST /api/administrateurs/
-Body : {"nom_admin": "Idrissi", "prenom_admin": "Omar", "email": "admin@fsmek.ma"}
-Réponse 201 : {"id": 1, "nom_admin": "Idrissi", "prenom_admin": "Omar", "email": "admin@fsmek.ma"}
-
-========================================================================
-GET /api/planifications/
-Réponse : [{"id": 4, "enseignant": 1, "salle": 1, "filiere": 1, "jour": "vendredi", "heure_debut": "10:00:00", "heure_fin": "12:00:00"}]
-
-===========================================================================
-POST /api/planifications/
-Body : {"enseignant": 1, "salle": 1, "filiere": 1, "jour": "vendredi", "heure_debut": "10:00:00", "heure_fin": "12:00:00"}
-Réponse 201 : {"id": 4, "enseignant": 1, "salle": 1, "filiere": 1, "jour": "vendredi", "heure_debut": "10:00:00", "heure_fin": "12:00:00"}
-
-==================================================================
-GET /api/seances/
-Réponse : [{"id": 1, "planification": 4, "date": "2026-05-22"}]
-
-==================================================================
-POST /api/seances/
-Body : {"planification": 4}
-Réponse 201 : {"id": 1, "planification": 4, "date": "2026-05-22"}
-
-====================================================================
-GET /api/qrcodes/
-Réponse : [{"id": 1, "seance": 1, "token": "550e8400-e29b-41d4-a716-446655440000", "cree_a": "2026-05-22T10:42:00Z", "expiration": 1}]
-
-===============================================================
-POST /api/qrcodes/
-Body : {"seance": 1}
-Réponse 201 : {"id": 1, "seance": 1, "token": "550e8400-e29b-41d4-a716-446655440000", "cree_a": "2026-05-22T10:42:00Z", "expiration": 1}
-
-==================================================================
-GET /api/presences/
-Réponse : [{"id": 1, "etudiant": 1, "seance": 1, "date_scan": "2026-05-22", "heure_scan": "10:47:32"}]
-
-=====================================================================
-POST /api/presences/
-Body : {"etudiant": 1, "seance": 1, "date_scan": "2026-05-22", "heure_scan": "10:47:32"}
-Réponse 201 : {"id": 1, "etudiant": 1, "seance": 1, "date_scan": "2026-05-22", "heure_scan": "10:47:32"}
-
-=====================================================================
-POST api/etudiants/verifier/
-Body :
+**Réponse `200`**
+```json
 {
-    "CIE": "M33333",
+  "token": "nouveau-uuid-...",
+  "seance_id": 1,
+  "expire_dans": 45
+}
+```
+
+---
+
+### `POST /api/etudiants/verifier/`
+
+Vérifie l'existence d'un étudiant dans la base de données avant de scanner.
+
+**Body**
+```json
+{
+  "CIE": "M33333",
+  "nom": "haytham",
+  "prenom": "ahodi",
+  "email": "haytham@mail.com",
+  "filiere": "SDIA",
+  "password": "12345678"
+}
+```
+
+**Réponse `200`**
+```json
+{
+  "found": true,
+  "message": "Étudiant trouvé : ahodi haytham",
+  "etudiant": {
+    "id": 15,
     "nom": "haytham",
     "prenom": "ahodi",
     "email": "haytham@mail.com",
-    "filiere": "SDIA",
-    "password": "12345678"
-}
-Réponse :
-{
-    "found": true,
-    "message": "Étudiant trouvé : ahodi haytham",
-    "etudiant": {
-        "id": 15,
-        "nom": "haytham",
-        "prenom": "ahodi",
-        "email": "haytham@mail.com",
-        "CIE": "M33333",
-        "filiere": "SDIA"
-    }
-}
-
-==================================================================
-GET /api/seances/{id}/presences/     ici id == 3 
-Réponse : {
-    "seance_id": 3,
-    "date": "2026-05-20",
-    "planification": {
-        "filiere": "SDIA",
-        "salle": "2.2",
-        "heure_debut": "08:00:00",
-        "heure_fin": "12:00:00"
-    },
-    "total_presents": 0,
-    "presences": []
-}
-
-=====================================================================
-GET /api/seances/1/export/
-Header : Authorization: Bearer <token_enseignant>
-
-→ Télécharge le fichier : presences_seance_1_2026-05-22.xlsx
-
-
-=====================================================================
-POST /api/presences/scanner/
-Body :
-{
-    "token": "uuid-qrcode",
     "CIE": "M33333",
-    "nom": "ahodi",
-    "prenom": "haytham"
+    "filiere": "SDIA"
+  }
 }
-Réponse :
-{
-    "status": "success",
-    "message": "Présence enregistrée pour Haytham Ahodi",
-    "heure": "10:48:32"
-}
+```
 
-==================================================================
+---
+
+### `POST /api/presences/scanner/`
+
+Enregistre la présence d'un étudiant via le token QR Code.
+
+**Body**
+```json
+{
+  "token": "550e8400-e29b-41d4-a716-446655440000",
+  "CIE": "P123456",
+  "nom": "Alaoui",
+  "prenom": "Sara"
+}
+```
+
+**Réponse `200`**
+```json
+{
+  "status": "success",
+  "message": "Présence enregistrée pour Sara Alaoui",
+  "heure": "10:47:32"
+}
+```
+
+**Erreurs possibles**
+
+| Code | Message |
+|------|---------|
+| `400` | `token et CIE obligatoires` |
+| `400` | `QR Code expiré` |
+| `400` | `Présence déjà enregistrée` |
+| `404` | `QR Code invalide` |
+| `404` | `CIE introuvable` |
+
+---
+
+### `GET /api/seances/{id}/presences/`
+
+Retourne la liste des présences enregistrées pour une séance.
+
+**Réponse `200`**
+```json
+{
+  "seance_id": 3,
+  "date": "2026-05-20",
+  "planification": {
+    "filiere": "SDIA",
+    "salle": "2.2",
+    "heure_debut": "08:00:00",
+    "heure_fin": "12:00:00"
+  },
+  "total_presents": 0,
+  "presences": []
+}
+```
+
+---
+
+### `GET /api/seances/{id}/export/`
+
+> 🔒 Requiert un token enseignant.
+
+Télécharge la feuille de présences au format Excel.
+
+**Réponse** : fichier `presences_seance_{id}_{date}.xlsx`
+
+---
+
+## Ressources CRUD
+
+### Filières
+
+| Méthode | Endpoint | Description |
+|---------|----------|-------------|
+| `GET` | `/api/filieres/` | Liste toutes les filières |
+| `POST` | `/api/filieres/` | Créer une filière |
+
+**POST body**
+```json
+{ "nom_filiere": "SDIA" }
+```
+
+**Réponse `201`**
+```json
+{ "id": 1, "nom_filiere": "SDIA" }
+```
+
+---
+
+### Salles
+
+| Méthode | Endpoint | Description |
+|---------|----------|-------------|
+| `GET` | `/api/salles/` | Liste toutes les salles |
+| `POST` | `/api/salles/` | Créer une salle |
+
+**POST body**
+```json
+{ "nom_salle": "2.2" }
+```
+
+**Réponse `201`**
+```json
+{ "id": 1, "nom_salle": "2.2" }
+```
+
+---
+
+### Enseignants
+
+| Méthode | Endpoint | Description |
+|---------|----------|-------------|
+| `GET` | `/api/enseignants/` | Liste tous les enseignants |
+| `POST` | `/api/enseignants/` | Créer un enseignant |
+
+**POST body**
+```json
+{
+  "nom_enseignant": "Benali",
+  "prenom_enseignant": "Karim",
+  "email": "prof@fsmek.ma"
+}
+```
+
+**Réponse `201`**
+```json
+{ "id": 1, "nom_enseignant": "Benali", "prenom_enseignant": "Karim", "email": "prof@fsmek.ma" }
+```
+
+---
+
+### Étudiants
+
+| Méthode | Endpoint | Description |
+|---------|----------|-------------|
+| `GET` | `/api/etudiants/` | Liste tous les étudiants |
+| `POST` | `/api/etudiants/` | Créer un étudiant |
+
+**POST body**
+```json
+{
+  "nom_etudiant": "Alaoui",
+  "prenom_etudiant": "Sara",
+  "CIE": "P123456",
+  "filiere": 1
+}
+```
+
+**Réponse `201`**
+```json
+{ "id": 1, "nom_etudiant": "Alaoui", "prenom_etudiant": "Sara", "CIE": "P123456", "filiere": 1 }
+```
+
+---
+
+### Administrateurs
+
+| Méthode | Endpoint | Description |
+|---------|----------|-------------|
+| `GET` | `/api/administrateurs/` | Liste tous les admins |
+| `POST` | `/api/administrateurs/` | Créer un admin |
+
+**POST body**
+```json
+{
+  "nom_admin": "Idrissi",
+  "prenom_admin": "Omar",
+  "email": "admin@fsmek.ma"
+}
+```
+
+**Réponse `201`**
+```json
+{ "id": 1, "nom_admin": "Idrissi", "prenom_admin": "Omar", "email": "admin@fsmek.ma" }
+```
+
+---
+
+### Planifications
+
+| Méthode | Endpoint | Description |
+|---------|----------|-------------|
+| `GET` | `/api/planifications/` | Liste toutes les planifications |
+| `POST` | `/api/planifications/` | Créer une planification |
+
+**POST body**
+```json
+{
+  "enseignant": 1,
+  "salle": 1,
+  "filiere": 1,
+  "jour": "vendredi",
+  "heure_debut": "10:00:00",
+  "heure_fin": "12:00:00"
+}
+```
+
+**Réponse `201`**
+```json
+{ "id": 4, "enseignant": 1, "salle": 1, "filiere": 1, "jour": "vendredi", "heure_debut": "10:00:00", "heure_fin": "12:00:00" }
+```
+
+---
+
+### Séances
+
+| Méthode | Endpoint | Description |
+|---------|----------|-------------|
+| `GET` | `/api/seances/` | Liste toutes les séances |
+| `POST` | `/api/seances/` | Créer une séance |
+
+**POST body**
+```json
+{ "planification": 4 }
+```
+
+**Réponse `201`**
+```json
+{ "id": 1, "planification": 4, "date": "2026-05-22" }
+```
+
+---
+
+### QR Codes
+
+| Méthode | Endpoint | Description |
+|---------|----------|-------------|
+| `GET` | `/api/qrcodes/` | Liste tous les QR Codes |
+| `POST` | `/api/qrcodes/` | Créer un QR Code |
+
+**POST body**
+```json
+{ "seance": 1 }
+```
+
+**Réponse `201`**
+```json
+{ "id": 1, "seance": 1, "token": "550e8400-...", "cree_a": "2026-05-22T10:42:00Z", "expiration": 1 }
+```
+
+---
+
+### Présences
+
+| Méthode | Endpoint | Description |
+|---------|----------|-------------|
+| `GET` | `/api/presences/` | Liste toutes les présences |
+| `POST` | `/api/presences/` | Créer une présence manuellement |
+
+**POST body**
+```json
+{
+  "etudiant": 1,
+  "seance": 1,
+  "date_scan": "2026-05-22",
+  "heure_scan": "10:47:32"
+}
+```
+
+**Réponse `201`**
+```json
+{ "id": 1, "etudiant": 1, "seance": 1, "date_scan": "2026-05-22", "heure_scan": "10:47:32" }
+```
