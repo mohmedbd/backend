@@ -476,3 +476,65 @@ Vérifie l'existence d'un étudiant dans la base de données (utilisé avant le 
 ```json
 { "id": 1, "etudiant": 1, "seance": 1, "date_scan": "2026-05-22", "heure_scan": "10:47:32" }
 ```
+
+
+===================================================================
+PUT-PATCH         /api/etudiants/{id}/    accesible par admin
+pour patch : envoyer seulement les champs a changer
+body :
+{
+    "nom_etudiant": "Alami",
+    "prenom_etudiant": "Youssef",
+    "email_etudiant": "youssef@test.com",
+    "password_etudiant": "123",
+    "CIE": "C123456",
+    "filier_etudiant": 1
+}
+reponse : 
+{
+    "id": 1,
+    "filier_etudiant_nom": "SDIA",
+    "nom_etudiant": "Alami",
+    "prenom_etudiant": "Youssef",
+    "email_etudiant": "youssef@test.com",
+    "password_etudiant": "123",
+    "CIE": "C123456",
+    "filier_etudiant": 1
+}
+
+DELETE            /api/etudiants/{id}/            accesible par admin
+
+=======================================================================
+PUT-PATCH         /api/enseignants/{id}/          accesible par admin
+pour patch : envoyer seulement les champs a changer
+body :
+{
+    "nom_enseignant": "Alami",
+    "prenom_enseignant": "Karim",
+    "email_enseignant": "karim.alami@gmail.com",
+    "password_enseignant": "nouveauMotDePasse123"
+}
+
+DELETE            /api/enseignants/{id}/          accesible par admin
+
+=======================================================================
+PUT-PATCH         /api/planifications/{id}/       accesible par admin
+pour patch : envoyer seulement les champs a changer
+body :
+{
+    "enseignant": 1,
+    "salle": 2,
+    "filiere": 3,
+    "jour": "lundi",
+    "heure_debut": "08:00:00",
+    "heure_fin": "10:00:00",
+    "semestre": "S6"
+}
+
+DELETE            /api/planifications/{id}/       accesible par admin
+
+========================================================================
+DELETE            /api/seances/{id}/         accesible par ensiegnant
+
+========================================================================
+DELETE            /api/presences/{id}/       accesible par ensiegnant

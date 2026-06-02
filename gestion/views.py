@@ -19,6 +19,21 @@ from .serializers import (
     SeanceQRSerializer, QRCodeSerializer, PresenceSerializer
 )
 
+import jwt
+from django.conf import settings
+def get_role_from_request(request):
+    
+    auth_header = request.headers.get('Authorization', '')
+    if not auth_header.startswith('Bearer '):
+        return None
+    token_str = auth_header.split(' ')[1]
+    try:
+        payload = jwt.decode(token_str, settings.SECRET_KEY, algorithms=['HS256'])
+        return payload.get('role'), payload.get('user_id')
+    except jwt.ExpiredSignatureError:
+        return None, None
+    except jwt.InvalidTokenError:
+        return None, None
 class FiliereViewSet(viewsets.ModelViewSet):
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated]
@@ -37,6 +52,24 @@ class EnseignantViewSet(viewsets.ModelViewSet):
     queryset = Enseignant.objects.all()
     serializer_class = EnseignantSerializer
 
+    def update(self, request, *args, **kwargs):
+        role, _ = get_role_from_request(request)
+        if role != 'admin':
+            return Response({'error': 'Réservé aux administrateurs'}, status=403)
+        return super().update(request, *args, **kwargs)
+
+    def partial_update(self, request, *args, **kwargs):
+        role, _ = get_role_from_request(request)
+        if role != 'admin':
+            return Response({'error': 'Réservé aux administrateurs'}, status=403)
+        return super().partial_update(request, *args, **kwargs)
+
+    def destroy(self, request, *args, **kwargs):
+        role, _ = get_role_from_request(request)
+        if role != 'admin':
+            return Response({'error': 'Réservé aux administrateurs'}, status=403)
+        return super().destroy(request, *args, **kwargs)
+
 class AdministrateurViewSet(viewsets.ModelViewSet):
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated]
@@ -49,17 +82,65 @@ class EtudiantViewSet(viewsets.ModelViewSet):
     queryset = Etudiant.objects.all()
     serializer_class = EtudiantSerializer
 
+    def update(self, request, *args, **kwargs):
+        role, _ = get_role_from_request(request)
+        if role != 'admin':
+            return Response({'error': 'Réservé aux administrateurs'}, status=403)
+        return super().update(request, *args, **kwargs)
+
+    def partial_update(self, request, *args, **kwargs):
+        role, _ = get_role_from_request(request)
+        if role != 'admin':
+            return Response({'error': 'Réservé aux administrateurs'}, status=403)
+        return super().partial_update(request, *args, **kwargs)
+
+    def destroy(self, request, *args, **kwargs):
+        role, _ = get_role_from_request(request)
+        if role != 'admin':
+            return Response({'error': 'Réservé aux administrateurs'}, status=403)
+        return super().destroy(request, *args, **kwargs)
+
 class PlanificationViewSet(viewsets.ModelViewSet):
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated]
     queryset = Planification.objects.all()
     serializer_class = PlanificationSerializer
 
+    def update(self, request, *args, **kwargs):
+        role, _ = get_role_from_request(request)
+        if role != 'admin':
+            return Response({'error': 'Réservé aux administrateurs'}, status=403)
+        return super().update(request, *args, **kwargs)
+
+    def partial_update(self, request, *args, **kwargs):
+        role, _ = get_role_from_request(request)
+        if role != 'admin':
+            return Response({'error': 'Réservé aux administrateurs'}, status=403)
+        return super().partial_update(request, *args, **kwargs)
+
+    def destroy(self, request, *args, **kwargs):
+        role, _ = get_role_from_request(request)
+        if role != 'admin':
+            return Response({'error': 'Réservé aux administrateurs'}, status=403)
+        return super().destroy(request, *args, **kwargs)
+
 class SeanceQRViewSet(viewsets.ModelViewSet):
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated]
     queryset = SeanceQR.objects.all()
     serializer_class = SeanceQRSerializer
+
+    def destroy(self, request, *args, **kwargs):
+        role, enseignant_id = get_role_from_request(request)
+        if role != 'enseignant':
+            return Response({'error': 'Réservé aux enseignants'}, status=403)
+
+        seance = self.get_object()
+        # Vérifier que la séance appartient bien à cet enseignant
+        if seance.planification.enseignant.id != enseignant_id:
+            return Response({'error': 'Accès non autorisé à cette séance'}, status=403)
+
+        return super().destroy(request, *args, **kwargs)
 
 class QRCodeViewSet(viewsets.ModelViewSet):
     authentication_classes = [JWTAuthentication]
@@ -72,6 +153,18 @@ class PresenceViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
     queryset = Presence.objects.all()
     serializer_class = PresenceSerializer
+
+    def destroy(self, request, *args, **kwargs):
+        role, enseignant_id = get_role_from_request(request)
+        if role != 'enseignant':
+            return Response({'error': 'Réservé aux enseignants'}, status=403)
+
+        presence = self.get_object()
+        # Vérifier que la présence appartient à une séance de cet enseignant
+        if presence.seance.planification.enseignant.id != enseignant_id:
+            return Response({'error': 'Accès non autorisé à cette présence'}, status=403)
+
+        return super().destroy(request, *args, **kwargs)
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])

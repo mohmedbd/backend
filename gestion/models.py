@@ -50,7 +50,7 @@ class Etudiant(models.Model):
     prenom_etudiant   = models.CharField(max_length=30)
     email_etudiant    = models.EmailField(unique=True)
     password_etudiant = models.CharField(max_length=128)
-    filier_etudiant   = models.ForeignKey(   # ← FK maintenant
+    filier_etudiant   = models.ForeignKey(   
         Filiere,
         on_delete=models.SET_NULL,
         null=True
