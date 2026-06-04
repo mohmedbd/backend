@@ -505,7 +505,7 @@ def export_seance_excel(request, seance_id):
         row[0].font = style_titre
 
     # En-têtes colonnes
-    header_row = ['N°', 'Nom', 'Prénom', 'CIE', 'Présence']
+    header_row = ["N°", "Nom", "Prénom", "CIE", "Filière", "Présence"]
     ws.append(header_row)
 
     header_excel_row = ws.max_row
@@ -524,20 +524,22 @@ def export_seance_excel(request, seance_id):
             etudiant.nom_etudiant,
             etudiant.prenom_etudiant,
             etudiant.CIE,
+            str(etudiant.filier_etudiant),
             statut,
         ])
 
         # Colorier la cellule Présence
-        statut_cell      = ws.cell(row=ws.max_row, column=5)
+        statut_cell      = ws.cell(row=ws.max_row, column=6)
         statut_cell.fill = fill_present if est_present else fill_absent
         statut_cell.alignment = Alignment(horizontal='center')
 
     # Ajuster largeur colonnes
-    ws.column_dimensions['A'].width = 5
+    ws.column_dimensions['A'].width = 12
     ws.column_dimensions['B'].width = 20
     ws.column_dimensions['C'].width = 20
     ws.column_dimensions['D'].width = 15
     ws.column_dimensions['E'].width = 12
+    ws.column_dimensions['F'].width = 15
 
     # 7. Retourner la réponse HTTP
     filename = f"presences_seance_{seance_id}_{seance.date}.xlsx"
