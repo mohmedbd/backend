@@ -65,7 +65,6 @@ class Planification(models.Model):
     jour        = models.CharField(max_length=30)
     heure_debut = models.TimeField()
     heure_fin   = models.TimeField()
-    semestre    = models.CharField(max_length=30)
 
     def __str__(self):
         return f"{self.jour} - {self.enseignant}"
