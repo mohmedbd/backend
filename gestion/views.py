@@ -557,11 +557,16 @@ from django.utils import timezone
 def scanner_presence(request):
     token_uuid = request.data.get('token')
     cie        = request.data.get('CIE')
-    nom        = request.data.get('nom')
-    prenom     = request.data.get('prenom')
 
     if not all([token_uuid, cie]):
         return Response({'error': 'token et CIE obligatoires'}, status=400)
+    
+    # Récupérer @IP 
+    x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+    if x_forwarded_for:
+        ip = x_forwarded_for.split(',')[0].strip()
+    else:
+        ip = request.META.get('REMOTE_ADDR')
 
     # Récupérer le QRCode
     try:
@@ -573,6 +578,12 @@ def scanner_presence(request):
     if not qrcode.is_valid():
         return Response({'error': 'QR Code expiré'}, status=400)
 
+    seance = qrcode.seance
+
+    # @IP déjà scanné ou nn
+    if Presence.objects.filter(seance=seance, ip_address=ip).exists():
+        return Response({'error': 'Ce téléphone a déjà été utilisé pour cette séance'}, status=400)
+
     # Récupérer l'étudiant via CIE
     try:
         etudiant = Etudiant.objects.get(CIE=cie)
@@ -580,7 +591,6 @@ def scanner_presence(request):
         return Response({'error': 'CIE introuvable'}, status=404)
 
     # Anti-doublon
-    seance = qrcode.seance
     if Presence.objects.filter(etudiant=etudiant, seance=seance).exists():
         return Response({'error': 'Présence déjà enregistrée'}, status=400)
 
@@ -591,6 +601,7 @@ def scanner_presence(request):
         seance=seance,
         date_scan=now.date(),
         heure_scan=now.time(),
+        ip_address=ip,
     )
 
     return Response({

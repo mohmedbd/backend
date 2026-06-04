@@ -101,6 +101,7 @@ class Presence(models.Model):
     seance     = models.ForeignKey(SeanceQR, on_delete=models.CASCADE)
     date_scan  = models.DateField()
     heure_scan = models.TimeField()
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
 
     def __str__(self):
         return f"{self.etudiant} - {self.date_scan}"
