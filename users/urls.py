@@ -5,5 +5,5 @@ from .views import switch_role
 urlpatterns = [
     path('login/', views.login),
     path('register/', views.register),
-    path('auth/switch-role/', switch_role, name='switch-role'),
+    path('switch-role/', switch_role, name='switch-role'),
 ]
