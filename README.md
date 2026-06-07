@@ -538,3 +538,21 @@ DELETE            /api/seances/{id}/         accesible par ensiegnant
 
 ========================================================================
 DELETE            /api/presences/{id}/       accesible par ensiegnant
+
+========================================================================
+POST /api/auth/switch-role/
+Header : Authorization: Bearer <token_admin_enseignant> hnaya a drary token double 
+body :[
+  {
+      "role_voulu": "enseignant"
+  }
+  ou -------
+  {
+      "role_voulu": "admin"
+  }
+]
+reponse :
+{
+    "role_actif": "enseignant",
+    "access": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+}
