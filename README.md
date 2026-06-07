@@ -624,3 +624,10 @@ request.headers['Authorization'] = 'Bearer $token';
 request.files.add(await http.MultipartFile.fromPath('photo', imageFile.path));
 
 var response = await request.send();
+
+
+
+cloudinary values : 
+Cloud Name: dwczeughr
+API Key: 931942575826598
+API Secret: MUJtdkvhwqaAjHjdq-ylxQhkAtk
