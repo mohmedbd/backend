@@ -165,8 +165,11 @@ def register(request):
 
 import jwt
 from django.conf import settings
+from rest_framework.decorators import  authentication_classes
+
 @api_view(['POST'])
 @permission_classes([AllowAny])
+@authentication_classes([])
 def switch_role(request):
     auth_header = request.headers.get('Authorization', '')
     if not auth_header.startswith('Bearer '):
