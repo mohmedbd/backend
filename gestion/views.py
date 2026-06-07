@@ -35,20 +35,20 @@ def get_role_from_request(request):
     except jwt.InvalidTokenError:
         return None, None
 class FiliereViewSet(viewsets.ModelViewSet):
-    authentication_classes = [JWTAuthentication]
-    permission_classes = [IsAuthenticated]
+    authentication_classes = []                   
+    permission_classes = [AllowAny]
     queryset = Filiere.objects.all()
     serializer_class = FiliereSerializer
 
 class SalleViewSet(viewsets.ModelViewSet):
-    authentication_classes = [JWTAuthentication]
-    permission_classes = [IsAuthenticated]
+    authentication_classes = []                   
+    permission_classes = [AllowAny]
     queryset = Salle.objects.all()
     serializer_class = SalleSerializer
 
 class EnseignantViewSet(viewsets.ModelViewSet):
-    authentication_classes = [JWTAuthentication]
-    permission_classes = [IsAuthenticated]
+    authentication_classes = []                   
+    permission_classes = [AllowAny]
     queryset = Enseignant.objects.all()
     serializer_class = EnseignantSerializer
 
@@ -71,14 +71,14 @@ class EnseignantViewSet(viewsets.ModelViewSet):
         return super().destroy(request, *args, **kwargs)
 
 class AdministrateurViewSet(viewsets.ModelViewSet):
-    authentication_classes = [JWTAuthentication]
-    permission_classes = [IsAuthenticated]
+    authentication_classes = []                   
+    permission_classes = [AllowAny]
     queryset = Administrateur.objects.all()
     serializer_class = AdministrateurSerializer
 
 class EtudiantViewSet(viewsets.ModelViewSet):
-    authentication_classes = [JWTAuthentication]
-    permission_classes = [IsAuthenticated]
+    authentication_classes = []                   
+    permission_classes = [AllowAny]
     queryset = Etudiant.objects.all()
     serializer_class = EtudiantSerializer
 
@@ -101,8 +101,8 @@ class EtudiantViewSet(viewsets.ModelViewSet):
         return super().destroy(request, *args, **kwargs)
 
 class PlanificationViewSet(viewsets.ModelViewSet):
-    authentication_classes = [JWTAuthentication]
-    permission_classes = [IsAuthenticated]
+    authentication_classes = []                   
+    permission_classes = [AllowAny]
     queryset = Planification.objects.all()
     serializer_class = PlanificationSerializer
 
@@ -125,8 +125,8 @@ class PlanificationViewSet(viewsets.ModelViewSet):
         return super().destroy(request, *args, **kwargs)
 
 class SeanceQRViewSet(viewsets.ModelViewSet):
-    authentication_classes = [JWTAuthentication]
-    permission_classes = [IsAuthenticated]
+    authentication_classes = []                   
+    permission_classes = [AllowAny]
     queryset = SeanceQR.objects.all()
     serializer_class = SeanceQRSerializer
 
@@ -143,14 +143,14 @@ class SeanceQRViewSet(viewsets.ModelViewSet):
         return super().destroy(request, *args, **kwargs)
 
 class QRCodeViewSet(viewsets.ModelViewSet):
-    authentication_classes = [JWTAuthentication]
-    permission_classes = [IsAuthenticated]
+    authentication_classes = []                   
+    permission_classes = [AllowAny]
     queryset = QRCode.objects.all()
     serializer_class = QRCodeSerializer
 
 class PresenceViewSet(viewsets.ModelViewSet):
-    authentication_classes = [JWTAuthentication]
-    permission_classes = [IsAuthenticated]
+    authentication_classes = []                   
+    permission_classes = [AllowAny]
     queryset = Presence.objects.all()
     serializer_class = PresenceSerializer
 
@@ -609,6 +609,122 @@ def scanner_presence(request):
         'message': f'Présence enregistrée pour {etudiant.prenom_etudiant} {etudiant.nom_etudiant}',
         'heure': str(now.time())[:8],
     })
+
+
+import cloudinary.uploader
+
+@api_view(['POST', 'DELETE'])
+def update_profile_photo(request):
+    role, user_id = get_role_from_request(request)
+    if not role or not user_id:
+        return Response({'error': 'Token invalide'}, status=401)
+
+    # objet selon le rôle
+    try:
+        if role == 'etudiant':
+            user = Etudiant.objects.get(id=user_id)
+        elif role == 'enseignant':
+            user = Enseignant.objects.get(id=user_id)
+        elif role in ['admin', 'admin_enseignant']:
+            user = Administrateur.objects.get(id=user_id)
+        else:
+            return Response({'error': 'Rôle inconnu'}, status=400)
+    except Exception:
+        return Response({'error': 'Utilisateur introuvable'}, status=404)
+
+    if request.method == 'DELETE':
+        # Supprimer sur Cloudinary si public_id connu
+        user.photo_url = None
+        user.save()
+        return Response({'message': 'Photo supprimée'}, status=200)
+
+    # upload
+    photo = request.FILES.get('photo')
+    if not photo:
+        return Response({'error': 'Aucune image fournie'}, status=400)
+
+    # Validation type
+    allowed_types = ['image/jpeg', 'image/png', 'image/webp']
+    if photo.content_type not in allowed_types:
+        return Response({'error': 'Format non supporté (jpeg, png, webp)'}, status=status.HTTP_400_BAD_REQUEST)
+
+    # Validation taille (max 2 MB)
+    if photo.size > 2 * 1024 * 1024:
+        return Response({'error': 'Image (max 2 MB)'}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        result = cloudinary.uploader.upload(
+            photo,
+            folder=f'presenceqr/profiles/{role}s/',
+            public_id=f'{role}_{user_id}',  # écrase l'ancienne photo automatiquement
+            overwrite=True,
+            transformation=[
+                {'width': 300, 'height': 300, 'crop': 'fill', 'gravity': 'face'},
+            ]
+        )
+        url = result['secure_url']
+        user.photo_url = url
+        user.save()
+        return Response({'message': 'Photo mise à jour', 'photo_url': url}, status=200)
+    except Exception as e:
+        return Response({'error': f'Erreur Cloudinary : {str(e)}'}, status=500)
+
+@api_view(['GET', 'PATCH'])
+def my_profile(request):
+    role, user_id = get_role_from_request(request)
+    if not role or not user_id:
+        return Response({'error': 'Token invalide'}, status=401)
+
+    try:
+        if role == 'etudiant':
+            # only get
+            if request.method == 'PATCH':
+                return Response({'error': 'Modification non autorisée'}, status=403)
+            user = Etudiant.objects.get(id=user_id)
+            return Response({
+                'id': user.id,
+                'nom': user.nom_etudiant,
+                'prenom': user.prenom_etudiant,
+                'email': user.email_etudiant,
+                'CIE': user.CIE,
+                'filiere': user.filier_etudiant,
+                'photo_url': user.photo_url,
+                'role': 'etudiant',
+            })
+
+        elif role == 'enseignant':
+            # only GET 
+            if request.method == 'PATCH':
+                return Response({'error': 'Modification non autorisée'}, status=403)
+            user = Enseignant.objects.get(id=user_id)
+            return Response({
+                'id': user.id,
+                'nom': user.nom_enseignant,
+                'prenom': user.prenom_enseignant,
+                'email': user.email_enseignant,
+                'photo_url': user.photo_url,
+                'role': 'enseignant',
+            })
+
+        elif role in ['admin', 'admin_enseignant']:
+            user = Administrateur.objects.get(id=user_id)
+            # PATCH + get
+            if request.method == 'PATCH':
+                for field in ['nom_administrateur', 'prenom_administrateur', 'email_administrateur']:
+                    if field in request.data:
+                        setattr(user, field, request.data[field])
+                user.save()
+            return Response({
+                'id': user.id,
+                'nom': user.nom_administrateur,
+                'prenom': user.prenom_administrateur,
+                'email': user.email_administrateur,
+                'photo_url': user.photo_url,
+                'role': role,
+            })
+
+    except Exception:
+        return Response({'error': 'Utilisateur introuvable'}, status=404)
 
 
 @api_view(['GET'])

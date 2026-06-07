@@ -190,14 +190,19 @@ def switch_role(request):
     if role_voulu not in ['admin', 'enseignant']:
         return Response({'error': 'role_voulu doit être admin ou enseignant'}, status=400)
 
-    # Générer un token "pur" avec le rôle choisi
     user_id = payload.get('enseignant_id') if role_voulu == 'enseignant' else payload.get('admin_id')
 
-    new_token = RefreshToken()
-    new_token['role']    = role_voulu
-    new_token['user_id'] = user_id
+    from datetime import datetime, timedelta, timezone
+    new_payload = {
+        'token_type': 'access',
+        'user_id':    user_id,
+        'role':       role_voulu,
+        'exp':        datetime.now(timezone.utc) + timedelta(days=1),
+    'iat':        datetime.now(timezone.utc),                       
+    }
+    access_token = jwt.encode(new_payload, settings.SECRET_KEY, algorithm='HS256')
 
     return Response({
         'role_actif': role_voulu,
-        'access': str(new_token.access_token),
+        'access':     access_token,
     })

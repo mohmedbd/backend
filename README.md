@@ -556,3 +556,71 @@ reponse :
     "role_actif": "enseignant",
     "access": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
 }
+
+========================================================================
+GET /api/profile/
+Header : Authorization: Bearer <token>
+Body : aucun
+Réponse — étudiant :
+{
+    "id": 1,
+    "nom": "Benali",
+    "prenom": "Youssef",
+    "email": "youssef@gmail.com",
+    "CIE": "M33333",
+    "filiere": "SDIA",
+    "photo_url": "https://res.cloudinary.com/ton_cloud/image/upload/presenceqr/profiles/etudiants/etudiant_1.jpg",
+    "role": "etudiant"
+}
+
+========================================================================
+PATCH /api/profile/ — admin uniquement
+Header : Authorization: Bearer <token_admin>
+Body :
+{
+    "nom_administrateur": "Nouveau Nom",
+    "prenom_administrateur": "Nouveau Prénom",
+    "email_administrateur": "nouveau@gmail.com"
+}
+Réponse :
+{
+    "id": 1,
+    "nom": "Nouveau Nom",
+    "prenom": "Nouveau Prénom",
+    "email": "nouveau@gmail.com",
+    "photo_url": null,
+    "role": "admin"
+}
+
+========================================================================
+POST /api/profile/photo/
+Header : Authorization: Bearer <token>
+Body : form-data (pas JSON) 
+{
+  image (KEY , TYPE , VALUE)
+}
+Réponse :
+{
+    "message": "Photo mise à jour",
+    "photo_url": "https://res.cloudinary.com/ton_cloud/image/upload/presenceqr/profiles/etudiants/etudiant_1.jpg"
+}
+
+========================================================================
+DELETE /api/profile/photo/
+Header : Authorization: Bearer <token>
+Body : aucun
+Réponse :
+{
+    "message": "Photo supprimée"
+}
+
+========================================================================
+// Upload photo avec MultipartRequest
+var request = http.MultipartRequest(
+  'POST',
+  Uri.parse('$baseUrl/api/profile/photo/'),
+);
+request.headers['Authorization'] = 'Bearer $token';
+request.files.add(await http.MultipartFile.fromPath('photo', imageFile.path));
+
+var response = await request.send();

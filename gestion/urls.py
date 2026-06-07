@@ -6,7 +6,10 @@ from .views import (
     AdministrateurViewSet, EtudiantViewSet, PlanificationViewSet,
     SeanceQRViewSet, QRCodeViewSet, PresenceViewSet
 )
-from .views import verifier_etudiant, liste_presences_seance, export_seance_excel, scanner_presence
+from .views import (
+    verifier_etudiant, liste_presences_seance, export_seance_excel,
+    scanner_presence, update_profile_photo, my_profile
+)
 
 router = DefaultRouter()
 router.register(r'filieres', FiliereViewSet)
@@ -27,5 +30,7 @@ urlpatterns = [
     path('seances/<int:seance_id>/presences/', liste_presences_seance, name='liste-presences-seance'),
     path('seances/<int:seance_id>/export/', export_seance_excel, name='export-seance'),
     path('presences/scanner/', scanner_presence, name='scanner-presence'),
+    path('profile/', my_profile, name='my-profile'),
+    path('profile/photo/', update_profile_photo, name='update-profile-photo'),
     path('', include(router.urls)),
 ]

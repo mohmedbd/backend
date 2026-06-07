@@ -31,6 +31,7 @@ class Enseignant(models.Model):
 
     def __str__(self):
         return f"{self.prenom_enseignant} {self.nom_enseignant}"
+    photo_url = models.URLField(blank=True, null=True)
 
 
 #4 Admin (gestionnaire)
@@ -42,6 +43,7 @@ class Administrateur(models.Model):
 
     def __str__(self):
         return f"{self.prenom_admin} {self.nom_admin}"
+    photo_url = models.URLField(blank=True, null=True)
 
 
 #5 Étudiant
@@ -56,6 +58,7 @@ class Etudiant(models.Model):
         null=True
     )
     CIE               = models.CharField(max_length=30, unique=True)
+    photo_url = models.URLField(blank=True, null=True)
 
 #6 Planification
 class Planification(models.Model):
