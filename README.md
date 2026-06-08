@@ -839,3 +839,21 @@ API Secret: MUJtdkvhwqaAjHjdq-ylxQhkAtk
 { "error": "Token invalide" }           // 401
 { "error": "Utilisateur introuvable" }  // 404
 ```
+
+==================================================================
+POST /api/mes-planifications/
+json{
+  "salle": 2,
+  "filiere": 3,
+  "jour": "samedi",
+  "heure_debut": "14:00:00",
+  "heure_fin": "16:00:00"
+}
+PATCH /api/mes-planifications/{id}/
+json{
+  "jour": "mercredi",
+  "heure_debut": "10:00:00",
+  "heure_fin": "12:00:00"
+}
+DELETE /api/mes-planifications/{id}/
+Body vide — status 200
