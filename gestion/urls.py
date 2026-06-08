@@ -8,7 +8,8 @@ from .views import (
 )
 from .views import (
     verifier_etudiant, liste_presences_seance, export_seance_excel,
-    scanner_presence, update_profile_photo, my_profile
+    scanner_presence, update_profile_photo, my_profile,
+    mes_planifications, mes_planifications_detail
 )
 
 router = DefaultRouter()
@@ -32,5 +33,7 @@ urlpatterns = [
     path('presences/scanner/', scanner_presence, name='scanner-presence'),
     path('profile/', my_profile, name='my-profile'),
     path('profile/photo/', update_profile_photo, name='update-profile-photo'),
+    path('mes-planifications/', mes_planifications, name='mes-planifications'),
+    path('mes-planifications/<int:planification_id>/', mes_planifications_detail, name='mes-planifications-detail'),
     path('', include(router.urls)),
 ]

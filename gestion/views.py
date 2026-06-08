@@ -813,6 +813,52 @@ def scanner_presence(request):
         'heure': str(now.time())[:8],
     }, status=200)
 
+@api_view(['POST'])
+def mes_planifications(request):
+
+    role, enseignant_id = get_role_from_request(request)
+    if role not in ('enseignant', 'admin_enseignant'):
+        return Response({'error': 'Réservé aux enseignants'}, status=403)
+
+    data = request.data.copy()
+    data['enseignant'] = enseignant_id  # forcé — ne peut pas usurper un autre prof
+
+    serializer = PlanificationSerializer(data=data)
+    if serializer.is_valid():
+        serializer.save()
+        return Response(serializer.data, status=201)
+    return Response(serializer.errors, status=400)
+
+
+@api_view(['PATCH', 'DELETE'])
+def mes_planifications_detail(request, planification_id):
+
+    role, enseignant_id = get_role_from_request(request)
+    if role not in ('enseignant', 'admin_enseignant'):
+        return Response({'error': 'Réservé aux enseignants'}, status=403)
+
+    try:
+        planification = Planification.objects.get(id=planification_id)
+    except Planification.DoesNotExist:
+        return Response({'error': 'Planification introuvable'}, status=404)
+
+    if planification.enseignant.id != enseignant_id:
+        return Response({'error': 'Accès non autorisé à cette planification'}, status=403)
+
+    if request.method == 'DELETE':
+        planification.delete()
+        return Response({'message': 'Planification supprimée'}, status=200)
+
+    if request.method == 'PATCH':
+        data = request.data.copy()
+        data.pop('enseignant', None)  # l'enseignant ne peut pas changer le propriétaire
+
+        serializer = PlanificationSerializer(planification, data=data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=200)
+        return Response(serializer.errors, status=400)
+
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def home(request):
