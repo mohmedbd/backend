@@ -435,6 +435,7 @@ def liste_presences_seance(request, seance_id):
                 "CIE": p.etudiant.CIE,
                 "heure_scan": str(p.heure_scan),
                 "date_scan": str(p.date_scan),
+                "ip_address": p.ip_address,
             }
             for p in presences
         ]
