@@ -614,6 +614,8 @@ def scanner_presence(request):
 import cloudinary.uploader
 
 @api_view(['POST', 'DELETE'])
+@authentication_classes([])
+@permission_classes([AllowAny])
 def update_profile_photo(request):
     role, user_id = get_role_from_request(request)
     if not role or not user_id:
@@ -670,6 +672,8 @@ def update_profile_photo(request):
         return Response({'error': f'Erreur Cloudinary : {str(e)}'}, status=500)
 
 @api_view(['GET', 'PATCH'])
+@authentication_classes([])
+@permission_classes([AllowAny])
 def my_profile(request):
     role, user_id = get_role_from_request(request)
     if not role or not user_id:
