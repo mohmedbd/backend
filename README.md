@@ -631,3 +631,211 @@ cloudinary values :
 Cloud Name: dwczeughr
 API Key: 931942575826598
 API Secret: MUJtdkvhwqaAjHjdq-ylxQhkAtk
+
+========================================================================
+## APIs modifiées & nouvelles
+
+---
+
+### 🔄 POST `/api/seances/generer/` — MODIFIÉE
+
+**Header :** `Authorization: Bearer <token_enseignant>`
+
+**Body :**
+```json
+{
+    "planification_id": 1,
+    "latitude_prof": 33.8935,
+    "longitude_prof": -5.5473
+}
+```
+
+**Réponse (200) :**
+```json
+{
+    "seance_id": 1,
+    "token": "uuid",
+    "expire_dans": 60
+}
+```
+
+**Erreurs :**
+```json
+{ "error": "latitude_prof et longitude_prof obligatoires" }  // 400
+{ "error": "Token manquant" }                                // 401
+{ "error": "Accès réservé aux enseignants" }                 // 403
+{ "error": "Planification introuvable" }                     // 404
+{ "error": "Cette planification ne vous appartient pas" }    // 403
+```
+
+---
+
+### 🔄 POST `/api/presences/scanner/` — MODIFIÉE
+
+**Header :** aucun (public)
+
+**Body :**
+```json
+{
+    "token": "uuid-du-qrcode",
+    "CIE": "M33333",
+    "latitude_etudiant": 33.8935,
+    "longitude_etudiant": -5.5474
+}
+```
+
+**Réponse succès (200) :**
+```json
+{
+    "status": "success",
+    "message": "Présence enregistrée pour Youssef Benali",
+    "heure": "10:48:32"
+}
+```
+
+**Erreurs :**
+```json
+{ "error": "token, CIE, latitude_etudiant et longitude_etudiant obligatoires" }  // 400
+{ "error": "QR Code invalide" }                                                   // 404
+{ "error": "QR Code expiré" }                                                     // 400
+{ "error": "Vous êtes trop loin du QR Code (127m). Vous devez être dans la salle." } // 403
+{ "error": "CIE introuvable" }                                                    // 404
+{ "error": "Présence déjà enregistrée" }                                          // 400
+{ "error": "Présence déjà enregistrée depuis cet appareil" }                      // 400
+```
+
+---
+
+### 🆕 GET `/api/profile/`
+
+**Header :** `Authorization: Bearer <token>`
+
+**Body :** aucun
+
+**Réponse étudiant (200) :**
+```json
+{
+    "id": 1,
+    "nom": "Benali",
+    "prenom": "Youssef",
+    "email": "youssef@gmail.com",
+    "CIE": "M33333",
+    "filiere": "SDIA",
+    "photo_url": "https://res.cloudinary.com/.../etudiant_1.jpg",
+    "role": "etudiant"
+}
+```
+
+**Réponse enseignant (200) :**
+```json
+{
+    "id": 2,
+    "nom": "Alami",
+    "prenom": "Karim",
+    "email": "karim@gmail.com",
+    "photo_url": null,
+    "role": "enseignant"
+}
+```
+
+**Réponse admin (200) :**
+```json
+{
+    "id": 1,
+    "nom": "Dupont",
+    "prenom": "Admin",
+    "email": "admin@gmail.com",
+    "photo_url": null,
+    "role": "admin"
+}
+```
+
+**Erreurs :**
+```json
+{ "error": "Token invalide" }           // 401
+{ "error": "Utilisateur introuvable" }  // 404
+```
+
+---
+
+### 🆕 PATCH `/api/profile/` — admin uniquement
+
+**Header :** `Authorization: Bearer <token_admin>`
+
+**Body :** *(tous les champs optionnels)*
+```json
+{
+    "nom_administrateur": "Nouveau Nom",
+    "prenom_administrateur": "Nouveau Prénom",
+    "email_administrateur": "nouveau@gmail.com"
+}
+```
+
+**Réponse (200) :**
+```json
+{
+    "id": 1,
+    "nom": "Nouveau Nom",
+    "prenom": "Nouveau Prénom",
+    "email": "nouveau@gmail.com",
+    "photo_url": null,
+    "role": "admin"
+}
+```
+
+**Erreurs :**
+```json
+{ "error": "Token invalide" }             // 401
+{ "error": "Modification non autorisée" } // 403 — étudiant ou enseignant
+{ "error": "Utilisateur introuvable" }    // 404
+```
+
+---
+
+### 🆕 POST `/api/profile/photo/`
+
+**Header :** `Authorization: Bearer <token>`
+
+**Body :** `form-data`
+
+| Key | Type | Value |
+|-----|------|-------|
+| `photo` | File | image.jpg / .png / .webp |
+
+**Réponse (200) :**
+```json
+{
+    "message": "Photo mise à jour",
+    "photo_url": "https://res.cloudinary.com/.../etudiant_1.jpg"
+}
+```
+
+**Erreurs :**
+```json
+{ "error": "Token invalide" }                         // 401
+{ "error": "Aucune image fournie" }                   // 400
+{ "error": "Format non supporté (jpeg, png, webp)" }  // 400
+{ "error": "Image trop lourde (max 2 MB)" }           // 400
+{ "error": "Erreur Cloudinary : ..." }                // 500
+```
+
+---
+
+### 🆕 DELETE `/api/profile/photo/`
+
+**Header :** `Authorization: Bearer <token>`
+
+**Body :** aucun
+
+**Réponse (200) :**
+```json
+{
+    "message": "Photo supprimée"
+}
+```
+
+**Erreurs :**
+```json
+{ "error": "Token invalide" }           // 401
+{ "error": "Utilisateur introuvable" }  // 404
+```

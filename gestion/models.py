@@ -77,6 +77,8 @@ class Planification(models.Model):
 class SeanceQR(models.Model):
     planification = models.ForeignKey(Planification, on_delete=models.CASCADE)
     date          = models.DateField(auto_now_add=True)
+    latitude_prof    = models.FloatField(null=True, blank=True)
+    longitude_prof   = models.FloatField(null=True, blank=True)
 
     def __str__(self):
         return f"Séance {self.date}"

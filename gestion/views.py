@@ -170,6 +170,11 @@ class PresenceViewSet(viewsets.ModelViewSet):
 @permission_classes([IsAuthenticated])
 def generer_seance_qr(request):
     planification_id = request.data.get('planification_id')
+    latitude_prof    = request.data.get('latitude_prof')
+    longitude_prof   = request.data.get('longitude_prof')
+
+    if not latitude_prof or not longitude_prof:
+        return Response({'error': 'latitude_prof et longitude_prof obligatoires'}, status=400)
 
     if not planification_id:
         return Response({'error': 'planification_id est requis'}, status=status.HTTP_400_BAD_REQUEST)
@@ -199,7 +204,11 @@ def generer_seance_qr(request):
     if planification.enseignant != enseignant:
         return Response({'error': 'Cette planification ne vous appartient pas'}, status=status.HTTP_403_FORBIDDEN)
 
-    seance = SeanceQR.objects.create(planification=planification)
+    seance = SeanceQR.objects.create(
+        planification=planification,
+        latitude_prof=latitude_prof,
+        longitude_prof=longitude_prof,
+    )
     qrcode = QRCode.objects.create(seance=seance)
 
     expire_dans = int((qrcode.cree_a + timedelta(minutes=qrcode.expiration) - timezone.now()).total_seconds())
@@ -730,6 +739,78 @@ def my_profile(request):
     except Exception:
         return Response({'error': 'Utilisateur introuvable'}, status=404)
 
+
+import math
+
+def calculer_distance(lat1, lon1, lat2, lon2):
+    R = 6371000  # rayon Terre en mètres
+    phi1 = math.radians(lat1)
+    phi2 = math.radians(lat2)
+    dphi = math.radians(lat2 - lat1)
+    dlambda = math.radians(lon2 - lon1)
+
+    a = math.sin(dphi/2)**2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda/2)**2
+    return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+
+@api_view(['POST'])
+@authentication_classes([])
+@permission_classes([AllowAny])
+def scanner_presence(request):
+    token_uuid        = request.data.get('token')
+    cie               = request.data.get('CIE')
+    latitude_etudiant = request.data.get('latitude_etudiant')
+    longitude_etudiant= request.data.get('longitude_etudiant')
+
+    if not all([token_uuid, cie, latitude_etudiant, longitude_etudiant]):
+        return Response({'error': 'token, CIE, latitude_etudiant et longitude_etudiant obligatoires'}, status=400)
+
+    try:
+        qrcode = QRCode.objects.get(token=token_uuid)
+    except QRCode.DoesNotExist:
+        return Response({'error': 'QR Code invalide'}, status=404)
+
+    if not qrcode.is_valid():
+        return Response({'error': 'QR Code expiré'}, status=400)
+
+    seance = qrcode.seance
+    if seance.latitude_prof and seance.longitude_prof:
+        distance = calculer_distance(
+            seance.latitude_prof, seance.longitude_prof,
+            float(latitude_etudiant), float(longitude_etudiant)
+        )
+        if distance > 50:  # 50 metre
+            return Response({
+                'error': f'Vous êtes trop loin du QR Code ({int(distance)}m). Vous devez être dans la salle.'
+            }, status=403)
+
+    try:
+        etudiant = Etudiant.objects.get(CIE=cie)
+    except Etudiant.DoesNotExist:
+        return Response({'error': 'CIE introuvable'}, status=404)
+
+    if Presence.objects.filter(etudiant=etudiant, seance=seance).exists():
+        return Response({'error': 'Présence déjà enregistrée'}, status=400)
+
+    # Anti-fraud IP existant
+    ip = request.META.get('HTTP_X_FORWARDED_FOR', '').split(',')[0].strip() \
+        or request.META.get('REMOTE_ADDR')
+    if Presence.objects.filter(seance=seance, ip_address=ip).exists():
+        return Response({'error': 'Présence déjà enregistrée depuis cet appareil'}, status=400)
+
+    now = timezone.now()
+    Presence.objects.create(
+        etudiant=etudiant,
+        seance=seance,
+        date_scan=now.date(),
+        heure_scan=now.time(),
+        ip_address=ip,
+    )
+
+    return Response({
+        'status': 'success',
+        'message': f'Présence enregistrée pour {etudiant.prenom_etudiant} {etudiant.nom_etudiant}',
+        'heure': str(now.time())[:8],
+    }, status=200)
 
 @api_view(['GET'])
 @permission_classes([AllowAny])
