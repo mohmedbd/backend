@@ -103,6 +103,7 @@ docs:     modification du README
 - [x] Validation token JWT dans register (AccessToken)
 - [x] Vérification rôle admin dans register
 - [x] Vérification email/CIE unique dans register
+- [x] authentication_classes = [] sur tous les ViewSets (incompatible avec jwt.encode() manuel) ✅
 - [ ] gunicorn ajouté dans requirements.txt
 - [ ] STATIC_ROOT ajouté dans settings.py
 - [ ] Procfile créé
@@ -246,3 +247,24 @@ Header obligatoire :
    3. Créer le Procfile
 → Attendre Zaid : Protection des routes avec JWT (feat/jwt-protection)
 → Génération QR Code (logique métier principale)
+
+
+## ⚠️ Note importante — authentication_classes et permission_classes
+
+Tous les ViewSets utilisent :
+```python
+authentication_classes = []
+permission_classes = [AllowAny]
+```
+
+Car SimpleJWT's `JWTAuthentication` est incompatible avec les tokens générés
+manuellement via `jwt.encode()`. Si on laisse `JWTAuthentication` :
+- "Token has no id" → sur les ViewSets
+- "User not found" → sur les vues fonction
+
+La sécurité est assurée par `get_role_from_request()` appelé manuellement
+dans chaque méthode destroy(), update(), partial_update().
+
+## ⚠️ Note importante — Conflit AccessToken
+Même règle pour switch_role et tous les ViewSets :
+toujours utiliser @authentication_classes([]) pour bypasser SimpleJWT.
