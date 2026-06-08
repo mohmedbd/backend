@@ -508,7 +508,7 @@ def export_seance_excel(request, seance_id):
     ws.append(['Filière',   filiere.nom_filiere])
     ws.append(['Salle',     str(seance.planification.salle)])
     ws.append(['Date',      str(seance.date)])
-    ws.append(['Semestre',  seance.planification.semestre])
+    ws.append(['Semestre',  seance.planification.filiere.semester_filiere])
     ws.append([])  
 
     for row in ws.iter_rows(min_row=1, max_row=4):
