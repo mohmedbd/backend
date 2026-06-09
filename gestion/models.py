@@ -65,6 +65,7 @@ class Planification(models.Model):
     enseignant  = models.ForeignKey(Enseignant, on_delete=models.CASCADE)
     salle       = models.ForeignKey(Salle, on_delete=models.CASCADE)
     filiere     = models.ForeignKey(Filiere, on_delete=models.CASCADE)
+    module      = models.CharField(max_length=100)
     jour        = models.CharField(max_length=30)
     heure_debut = models.TimeField()
     heure_fin   = models.TimeField()

@@ -404,6 +404,7 @@ Vérifie l'existence d'un étudiant dans la base de données (utilisé avant le 
   "enseignant": 1,
   "salle": 1,
   "filiere": 1,
+  "module": "Algorithmique",
   "jour": "vendredi",
   "heure_debut": "10:00:00",
   "heure_fin": "12:00:00"
@@ -525,6 +526,7 @@ body :
     "enseignant": 1,
     "salle": 2,
     "filiere": 3,
+    "module": "Algorithmique",
     "jour": "lundi",
     "heure_debut": "08:00:00",
     "heure_fin": "10:00:00",

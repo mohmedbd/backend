@@ -311,6 +311,7 @@ def planifications_du_jour(request):
             'id':          p.id,
             'salle':       str(p.salle),
             'filiere':     str(p.filiere),
+            'module':      p.module,
             'heure_debut': str(p.heure_debut),
             'heure_fin':   str(p.heure_fin),
             'jour':        p.jour,
@@ -423,6 +424,7 @@ def liste_presences_seance(request, seance_id):
         "date": str(seance.date),
         "planification": {
             "filiere": seance.planification.filiere.nom_filiere,
+            "module": seance.planification.module,
             "salle": seance.planification.salle.nom_salle,
             "heure_debut": str(seance.planification.heure_debut),
             "heure_fin": str(seance.planification.heure_fin),
@@ -506,6 +508,7 @@ def export_seance_excel(request, seance_id):
 
     # Infos séance
     ws.append(['Filière',   filiere.nom_filiere])
+    ws.append(['Module',    seance.planification.module])
     ws.append(['Salle',     str(seance.planification.salle)])
     ws.append(['Date',      str(seance.date)])
     ws.append(['Semestre',  seance.planification.filiere.semester_filiere])
