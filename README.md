@@ -859,3 +859,65 @@ json{
 }
 DELETE /api/mes-planifications/{id}/
 Body vide — status 200
+
+
+```markdown
+### GET /api/etudiants/emploi-du-temps/
+
+Récupère l'emploi du temps (planifications) de l'étudiant connecté, basé sur sa filière.
+
+**Accès :** Étudiant uniquement (token JWT requis)
+
+**Headers**
+```
+Authorization: Bearer <token_etudiant>
+```
+
+**Réponse succès — 200 OK**
+```json
+{
+    "filiere": "SDIA",
+    "total": 4,
+    "planifications": [
+        {
+            "id": 13,
+            "jour": "lundi",
+            "heure_debut": "10:30:00",
+            "heure_fin": "12:30:00",
+            "module": "Stage",
+            "salle": "1.2",
+            "enseignant": "Youssef Alami"
+        },
+        {
+            "id": 14,
+            "jour": "mercredi",
+            "heure_debut": "08:30:00",
+            "heure_fin": "12:30:00",
+            "module": "Java",
+            "salle": "1.1",
+            "enseignant": "Mohammed Badaoui"
+        }
+    ]
+}
+```
+
+**Réponses d'erreur**
+
+| Code | Cas | Body |
+|------|-----|------|
+| 401 | Token manquant / expiré / invalide | `{ "detail": "Authentication credentials were not provided." }` |
+| 403 | Rôle ≠ étudiant | `{ "error": "Réservé aux étudiants" }` |
+| 404 | Étudiant introuvable | `{ "error": "Étudiant introuvable" }` |
+
+**Notes**
+- Les planifications sont triées automatiquement par jour (lundi → dimanche) puis par heure de début.
+- La filière de l'étudiant détermine quelles planifications sont retournées.
+```
+
+Et dans la table récapitulative des endpoints (si ton README en a une), ajoute une ligne :
+
+```markdown
+| Méthode | Endpoint | Accès | Description |
+|---------|----------|-------|--------------|
+| GET | `/api/etudiants/emploi-du-temps/` | Étudiant | Emploi du temps de l'étudiant connecté |
+```

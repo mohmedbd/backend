@@ -9,7 +9,7 @@ from .views import (
 from .views import (
     verifier_etudiant, liste_presences_seance, export_seance_excel,
     scanner_presence, update_profile_photo, my_profile,
-    mes_planifications, mes_planifications_detail
+    mes_planifications, mes_planifications_detail, emploi_du_temps_etudiant
 )
 
 router = DefaultRouter()
@@ -35,5 +35,6 @@ urlpatterns = [
     path('profile/photo/', update_profile_photo, name='update-profile-photo'),
     path('mes-planifications/', mes_planifications, name='mes-planifications'),
     path('mes-planifications/<int:planification_id>/', mes_planifications_detail, name='mes-planifications-detail'),
+    path('etudiants/emploi-du-temps/', emploi_du_temps_etudiant, name='emploi-du-temps-etudiant'),
     path('', include(router.urls)),
 ]

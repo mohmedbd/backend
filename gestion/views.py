@@ -818,6 +818,50 @@ def mes_planifications_detail(request, planification_id):
         return Response(serializer.errors, status=400)
 
 @api_view(['GET'])
+def emploi_du_temps_etudiant(request):
+    role, etudiant_id = get_role_from_request(request)
+
+    if role != 'etudiant':
+        return Response({'error': 'Réservé aux étudiants'}, status=403)
+
+    try:
+        etudiant = Etudiant.objects.get(id=etudiant_id)
+    except Etudiant.DoesNotExist:
+        return Response({'error': 'Étudiant introuvable'}, status=404)
+
+    planifications = Planification.objects.filter(
+        filiere=etudiant.filier_etudiant
+    ).select_related('enseignant', 'salle', 'filiere')
+
+    ordre_jours = {
+        'lundi': 1, 'mardi': 2, 'mercredi': 3,
+        'jeudi': 4, 'vendredi': 5, 'samedi': 6, 'dimanche': 7
+    }
+    planifications = sorted(
+        planifications,
+        key=lambda p: (ordre_jours.get(p.jour.lower(), 99), p.heure_debut)
+    )
+
+    data = {
+        "filiere": str(etudiant.filier_etudiant),
+        "total": len(planifications),
+        "planifications": [
+            {
+                "id": p.id,
+                "jour": p.jour,
+                "heure_debut": str(p.heure_debut),
+                "heure_fin": str(p.heure_fin),
+                "module": p.module,
+                "salle": p.salle.nom_salle,
+                "enseignant": f"{p.enseignant.prenom_enseignant} {p.enseignant.nom_enseignant}",
+            }
+            for p in planifications
+        ]
+    }
+
+    return Response(data, status=200)
+
+@api_view(['GET'])
 @permission_classes([AllowAny])
 def home(request):
     return HttpResponse("Render works!")
