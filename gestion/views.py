@@ -319,7 +319,7 @@ def planifications_du_jour(request):
 
     return Response({
         'jour':           jour_actuel,
-        'date':           str(timezone.now().date()),
+        'date':           str(timezone.localtime().date()),
         'planifications': data,
         'total':          len(data),
     })
@@ -570,6 +570,8 @@ from django.utils import timezone
 def scanner_presence(request):
     token_uuid = request.data.get('token')
     cie        = request.data.get('CIE')
+    latitude_etudiant = request.data.get('latitude_etudiant')
+    longitude_etudiant= request.data.get('longitude_etudiant')
 
     if not all([token_uuid, cie]):
         return Response({'error': 'token et CIE obligatoires'}, status=400)
@@ -593,6 +595,17 @@ def scanner_presence(request):
 
     seance = qrcode.seance
 
+    # Vérifier la distance si les coordonnées sont présentes
+    if latitude_etudiant and longitude_etudiant and seance.latitude_prof and seance.longitude_prof:
+        distance = calculer_distance(
+            float(seance.latitude_prof), float(seance.longitude_prof),
+            float(latitude_etudiant), float(longitude_etudiant)
+        )
+        if distance > 50:  # 50 metres
+            return Response({
+                'error': f'Vous êtes trop loin du QR Code ({int(distance)}m). Vous devez être dans la salle.'
+            }, status=403)
+
     # @IP déjà scanné ou nn
     if Presence.objects.filter(seance=seance, ip_address=ip).exists():
         return Response({'error': 'Ce téléphone a déjà été utilisé pour cette séance'}, status=400)
@@ -607,20 +620,22 @@ def scanner_presence(request):
     if Presence.objects.filter(etudiant=etudiant, seance=seance).exists():
         return Response({'error': 'Présence déjà enregistrée'}, status=400)
 
-    # Enregistrer la présence
-    now = timezone.localtime()
+    # Enregistrer la présence - USE timezone.now() FOR DATABASE (UTC)
+    now_utc = timezone.now()
+    now_local = timezone.localtime(now_utc)
+    
     Presence.objects.create(
         etudiant=etudiant,
         seance=seance,
-        date_scan=now.date(),
-        heure_scan=now.time(),
+        date_scan=now_local.date(),
+        heure_scan=now_local.time(),
         ip_address=ip,
     )
 
     return Response({
         'status': 'success',
         'message': f'Présence enregistrée pour {etudiant.prenom_etudiant} {etudiant.nom_etudiant}',
-        'heure': str(now.time())[:8],
+        'heure': str(now_local.time())[:8],
     })
 
 
@@ -755,66 +770,6 @@ def calculer_distance(lat1, lon1, lat2, lon2):
 
     a = math.sin(dphi/2)**2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda/2)**2
     return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
-
-@api_view(['POST'])
-@authentication_classes([])
-@permission_classes([AllowAny])
-def scanner_presence(request):
-    token_uuid        = request.data.get('token')
-    cie               = request.data.get('CIE')
-    latitude_etudiant = request.data.get('latitude_etudiant')
-    longitude_etudiant= request.data.get('longitude_etudiant')
-
-    if not all([token_uuid, cie, latitude_etudiant, longitude_etudiant]):
-        return Response({'error': 'token, CIE, latitude_etudiant et longitude_etudiant obligatoires'}, status=400)
-
-    try:
-        qrcode = QRCode.objects.get(token=token_uuid)
-    except QRCode.DoesNotExist:
-        return Response({'error': 'QR Code invalide'}, status=404)
-
-    if not qrcode.is_valid():
-        return Response({'error': 'QR Code expiré'}, status=400)
-
-    seance = qrcode.seance
-    if seance.latitude_prof and seance.longitude_prof:
-        distance = calculer_distance(
-            seance.latitude_prof, seance.longitude_prof,
-            float(latitude_etudiant), float(longitude_etudiant)
-        )
-        if distance > 50:  # 50 metre
-            return Response({
-                'error': f'Vous êtes trop loin du QR Code ({int(distance)}m). Vous devez être dans la salle.'
-            }, status=403)
-
-    try:
-        etudiant = Etudiant.objects.get(CIE=cie)
-    except Etudiant.DoesNotExist:
-        return Response({'error': 'CIE introuvable'}, status=404)
-
-    if Presence.objects.filter(etudiant=etudiant, seance=seance).exists():
-        return Response({'error': 'Présence déjà enregistrée'}, status=400)
-
-    # Anti-fraud IP existant
-    ip = request.META.get('HTTP_X_FORWARDED_FOR', '').split(',')[0].strip() \
-        or request.META.get('REMOTE_ADDR')
-    if Presence.objects.filter(seance=seance, ip_address=ip).exists():
-        return Response({'error': 'Présence déjà enregistrée depuis cet appareil'}, status=400)
-
-    now = timezone.localtime()
-    Presence.objects.create(
-        etudiant=etudiant,
-        seance=seance,
-        date_scan=now.date(),
-        heure_scan=now.time(),
-        ip_address=ip,
-    )
-
-    return Response({
-        'status': 'success',
-        'message': f'Présence enregistrée pour {etudiant.prenom_etudiant} {etudiant.nom_etudiant}',
-        'heure': str(now.time())[:8],
-    }, status=200)
 
 @api_view(['POST'])
 def mes_planifications(request):
