@@ -806,7 +806,7 @@ def scanner_presence(request):
         etudiant=etudiant,
         seance=seance,
         date_scan=now.date(),
-        heure_scan=now.time(),
+        heure_scan=now.timetz(),
         ip_address=ip,
     )
 
