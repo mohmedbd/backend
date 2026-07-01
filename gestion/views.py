@@ -608,19 +608,19 @@ def scanner_presence(request):
         return Response({'error': 'Présence déjà enregistrée'}, status=400)
 
     # Enregistrer la présence
-    now = timezone.now()
+    now = timezone.localtime()
     Presence.objects.create(
         etudiant=etudiant,
         seance=seance,
         date_scan=now.date(),
-        heure_scan=now.timetz(),
+        heure_scan=now.time(),
         ip_address=ip,
     )
 
     return Response({
         'status': 'success',
         'message': f'Présence enregistrée pour {etudiant.prenom_etudiant} {etudiant.nom_etudiant}',
-        'heure': str(now.timetz())[:8],
+        'heure': str(now.time())[:8],
     })
 
 
@@ -801,19 +801,19 @@ def scanner_presence(request):
     if Presence.objects.filter(seance=seance, ip_address=ip).exists():
         return Response({'error': 'Présence déjà enregistrée depuis cet appareil'}, status=400)
 
-    now = timezone.now()
+    now = timezone.localtime()
     Presence.objects.create(
         etudiant=etudiant,
         seance=seance,
         date_scan=now.date(),
-        heure_scan=now.timetz(),
+        heure_scan=now.time(),
         ip_address=ip,
     )
 
     return Response({
         'status': 'success',
         'message': f'Présence enregistrée pour {etudiant.prenom_etudiant} {etudiant.nom_etudiant}',
-        'heure': str(now.timetz())[:8],
+        'heure': str(now.time())[:8],
     }, status=200)
 
 @api_view(['POST'])
