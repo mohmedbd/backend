@@ -620,7 +620,7 @@ def scanner_presence(request):
     return Response({
         'status': 'success',
         'message': f'Présence enregistrée pour {etudiant.prenom_etudiant} {etudiant.nom_etudiant}',
-        'heure': str(now.time())[:8],
+        'heure': str(now.timetz())[:8],
     })
 
 
@@ -813,7 +813,7 @@ def scanner_presence(request):
     return Response({
         'status': 'success',
         'message': f'Présence enregistrée pour {etudiant.prenom_etudiant} {etudiant.nom_etudiant}',
-        'heure': str(now.time())[:8],
+        'heure': str(now.timetz())[:8],
     }, status=200)
 
 @api_view(['POST'])
