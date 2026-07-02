@@ -110,6 +110,36 @@ def login(request):
     )
 
 @api_view(['POST'])
+@permission_classes([AllowAny])
+def token_refresh(request):
+    """
+    Rafraîchit le token d'accès à partir du refresh token.
+    
+    Utilisez cet endpoint quand vous recevez une erreur 401.
+    POST /api/auth/token/refresh/
+    Body: {"refresh": "eyJ..."}
+    """
+    refresh_token = request.data.get('refresh')
+    
+    if not refresh_token:
+        return Response(
+            {'error': 'Refresh token manquant'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    try:
+        refresh = RefreshToken(refresh_token)
+        return Response({
+            'access': str(refresh.access_token),
+            'refresh': str(refresh)
+        }, status=status.HTTP_200_OK)
+    except Exception as e:
+        return Response(
+            {'error': 'Token invalide ou expiré'},
+            status=status.HTTP_401_UNAUTHORIZED
+        )
+
+@api_view(['POST'])
 def register(request):
     # Vérifier le token JWT et le rôle admin
     auth_header = request.headers.get('Authorization')
