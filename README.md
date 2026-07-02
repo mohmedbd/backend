@@ -29,6 +29,8 @@ Système de gestion des présences par QR Code pour la Faculté des Sciences de 
 | Format | `application/json` |
 | Authentification | `Authorization: Bearer <access_token>` |
 | Expiration QR Code | 60 secondes (renouvelé automatiquement) |
+| Access Token Lifetime | 1 jour |
+| Refresh Token Lifetime | 7 jours |
 
 ---
 
@@ -63,6 +65,35 @@ Connexion d'un utilisateur (enseignant, étudiant ou admin).
   }
 }
 ```
+
+---
+
+### `POST /api/auth/token/refresh/`
+
+Rafraîchit le token d'accès à partir du refresh token. **Utilisez cet endpoint quand vous recevez une erreur 401.**
+
+**Body**
+```json
+{
+  "refresh": "eyJ..."
+}
+```
+
+**Réponse `200`**
+```json
+{
+  "access": "eyJ...",
+  "refresh": "eyJ..."
+}
+```
+
+**Erreurs**
+```json
+{ "error": "Refresh token manquant" }     // 400
+{ "error": "Token invalide ou expiré" }   // 401
+```
+
+> 💡 **Frontend:** Implémentez un intercepteur HTTP qui appelle cet endpoint automatiquement quand vous recevez 401.
 
 ---
 
@@ -102,13 +133,13 @@ Créer un nouveau compte utilisateur.
 Ordre d'utilisation typique par un enseignant :
 
 ```
-1. GET  /api/planifications/aujourd-hui/   → récupérer la planification du jour
-2. POST /api/seances/generer/              → créer la séance + premier QR Code
-3. GET  /api/qrcode/seance/{id}/          → rafraîchir le QR Code (toutes les ~60s)
-4. POST /api/etudiants/verifier/           → vérifier l'étudiant avant de scanner
-5. POST /api/presences/scanner/            → les étudiants scannent le QR
-6. GET  /api/seances/{id}/presences/      → consulter la liste des présents
-7. GET  /api/seances/{id}/export/         → exporter en Excel
+1. GET  /api/planifications/aujourd-hui/        → récupérer la planification du jour
+2. POST /api/seances/generer/                   → créer la séance + premier QR Code
+3. GET  /api/qrcode/seance/{id}/                → rafraîchir le QR Code (toutes les ~60s)
+4. POST /api/etudiants/verifier/                → vérifier l'étudiant avant de scanner
+5. POST /api/presences/scanner/                 → les étudiants scannent le QR
+6. GET  /api/seances/{id}/presences/            → consulter la liste des présents
+7. GET  /api/seances/{id}/export/               → exporter en Excel
 ```
 
 ---
@@ -116,6 +147,11 @@ Ordre d'utilisation typique par un enseignant :
 ### `GET /api/planifications/aujourd-hui/`
 
 Retourne l'emploi du temps du jour courant.
+
+**Header requis**
+```
+Authorization: Bearer <token_enseignant>
+```
 
 **Réponse `200`**
 ```json
@@ -127,6 +163,7 @@ Retourne l'emploi du temps du jour courant.
       "id": 4,
       "salle": "2.2",
       "filiere": "SDIA",
+      "module": "Algorithmique",
       "heure_debut": "10:42:15",
       "heure_fin": "11:42:15",
       "jour": "vendredi"
@@ -142,14 +179,21 @@ Retourne l'emploi du temps du jour courant.
 
 Crée une séance à partir d'une planification et génère le premier QR Code.
 
+**Header requis**
+```
+Authorization: Bearer <token_enseignant>
+```
+
 **Body**
 ```json
 {
-  "planification_id": 4
+  "planification_id": 4,
+  "latitude_prof": 33.8935,
+  "longitude_prof": -5.5473
 }
 ```
 
-**Réponse `200`**
+**Réponse `201`**
 ```json
 {
   "seance_id": 1,
@@ -158,11 +202,25 @@ Crée une séance à partir d'une planification et génère le premier QR Code.
 }
 ```
 
+**Erreurs possibles**
+```json
+{ "error": "latitude_prof et longitude_prof obligatoires" }  // 400
+{ "error": "Token manquant" }                                // 401 → utilisez /api/auth/token/refresh/
+{ "error": "Accès réservé aux enseignants" }                 // 403
+{ "error": "Planification introuvable" }                     // 404
+{ "error": "Cette planification ne vous appartient pas" }    // 403
+```
+
 ---
 
 ### `GET /api/qrcode/seance/{id}/`
 
 Récupère le QR Code actuel d'une séance (se renouvelle automatiquement).
+
+**Header requis**
+```
+Authorization: Bearer <token_enseignant>
+```
 
 **Réponse `200`**
 ```json
@@ -177,15 +235,15 @@ Récupère le QR Code actuel d'une séance (se renouvelle automatiquement).
 
 ### `POST /api/presences/scanner/`
 
-Enregistre la présence d'un étudiant via le token QR Code.
+Enregistre la présence d'un étudiant via le token QR Code. **Pas d'authentification requise (public).**
 
 **Body**
 ```json
 {
   "token": "550e8400-e29b-41d4-a716-446655440000",
-  "CIE": "P123456",
-  "nom": "Alaoui",
-  "prenom": "Sara"
+  "CIE": "M33333",
+  "latitude_etudiant": 33.8935,
+  "longitude_etudiant": -5.5474
 }
 ```
 
@@ -193,8 +251,8 @@ Enregistre la présence d'un étudiant via le token QR Code.
 ```json
 {
   "status": "success",
-  "message": "Présence enregistrée pour Sara Alaoui",
-  "heure": "10:47:32"
+  "message": "Présence enregistrée pour Youssef Benali",
+  "heure": "10:48:32"
 }
 ```
 
@@ -205,6 +263,8 @@ Enregistre la présence d'un étudiant via le token QR Code.
 | `400` | `token et CIE obligatoires` |
 | `400` | `QR Code expiré` |
 | `400` | `Présence déjà enregistrée` |
+| `400` | `Présence déjà enregistrée depuis cet appareil` |
+| `403` | `Vous êtes trop loin du QR Code (127m). Vous devez être dans la salle.` |
 | `404` | `QR Code invalide` |
 | `404` | `CIE introuvable` |
 
@@ -214,6 +274,11 @@ Enregistre la présence d'un étudiant via le token QR Code.
 
 Retourne la liste des présences enregistrées pour une séance.
 
+**Header requis**
+```
+Authorization: Bearer <token_enseignant>
+```
+
 **Réponse `200`**
 ```json
 {
@@ -221,12 +286,22 @@ Retourne la liste des présences enregistrées pour une séance.
   "date": "2026-05-20",
   "planification": {
     "filiere": "SDIA",
+    "module": "Algorithmique",
     "salle": "2.2",
     "heure_debut": "08:00:00",
     "heure_fin": "12:00:00"
   },
-  "total_presents": 0,
-  "presences": []
+  "total_presents": 42,
+  "presences": [
+    {
+      "nom": "Benali",
+      "prenom": "Youssef",
+      "CIE": "M33333",
+      "heure_scan": "10:47:32",
+      "date_scan": "2026-05-20",
+      "ip_address": "192.168.1.100"
+    }
+  ]
 }
 ```
 
@@ -249,17 +324,12 @@ Authorization: Bearer <token_enseignant>
 
 ### `POST /api/etudiants/verifier/`
 
-Vérifie l'existence d'un étudiant dans la base de données (utilisé avant le scan).
+Vérifie l'existence d'un étudiant dans la base de données avant le scan.
 
 **Body**
 ```json
 {
-  "CIE": "M33333",
-  "nom": "haytham",
-  "prenom": "ahodi",
-  "email": "haytham@mail.com",
-  "filiere": "SDIA",
-  "password": "12345678"
+  "CIE": "M33333"
 }
 ```
 
@@ -267,14 +337,26 @@ Vérifie l'existence d'un étudiant dans la base de données (utilisé avant le 
 ```json
 {
   "found": true,
-  "message": "Étudiant trouvé : ahodi haytham",
+  "message": "Étudiant trouvé : Youssef Benali",
   "etudiant": {
-    "id": 15,
-    "nom": "haytham",
-    "prenom": "ahodi",
-    "email": "haytham@mail.com",
+    "id": 1,
+    "nom": "Benali",
+    "prenom": "Youssef",
+    "email": "youssef@gmail.com",
     "CIE": "M33333",
     "filiere": "SDIA"
+  }
+}
+```
+
+**Réponse `404` (étudiant non trouvé)**
+```json
+{
+  "found": false,
+  "message": "Étudiant introuvable dans le système",
+  "recherche": {
+    "CIE": "M33333",
+    "email": null
   }
 }
 ```
@@ -327,19 +409,18 @@ Vérifie l'existence d'un étudiant dans la base de données (utilisé avant le 
 |---------|----------|-------------|
 | `GET` | `/api/enseignants/` | Liste tous les enseignants |
 | `POST` | `/api/enseignants/` | Créer un enseignant |
+| `PUT` | `/api/enseignants/{id}/` | Modifier un enseignant (admin only) |
+| `PATCH` | `/api/enseignants/{id}/` | Modifier partiellement (admin only) |
+| `DELETE` | `/api/enseignants/{id}/` | Supprimer un enseignant (admin only) |
 
 **POST body**
 ```json
 {
   "nom_enseignant": "Benali",
   "prenom_enseignant": "Karim",
-  "email": "prof@fsmek.ma"
+  "email_enseignant": "prof@fsmek.ma",
+  "password_enseignant": "motdepasse123"
 }
-```
-
-**Réponse `201`**
-```json
-{ "id": 1, "nom_enseignant": "Benali", "prenom_enseignant": "Karim", "email": "prof@fsmek.ma" }
 ```
 
 ---
@@ -350,20 +431,20 @@ Vérifie l'existence d'un étudiant dans la base de données (utilisé avant le 
 |---------|----------|-------------|
 | `GET` | `/api/etudiants/` | Liste tous les étudiants |
 | `POST` | `/api/etudiants/` | Créer un étudiant |
+| `PUT` | `/api/etudiants/{id}/` | Modifier un étudiant (admin only) |
+| `PATCH` | `/api/etudiants/{id}/` | Modifier partiellement (admin only) |
+| `DELETE` | `/api/etudiants/{id}/` | Supprimer un étudiant (admin only) |
 
 **POST body**
 ```json
 {
   "nom_etudiant": "Alaoui",
   "prenom_etudiant": "Sara",
+  "email_etudiant": "sara@gmail.com",
+  "password_etudiant": "motdepasse123",
   "CIE": "P123456",
-  "filiere": 1
+  "filier_etudiant": 1
 }
-```
-
-**Réponse `201`**
-```json
-{ "id": 1, "nom_etudiant": "Alaoui", "prenom_etudiant": "Sara", "CIE": "P123456", "filiere": 1 }
 ```
 
 ---
@@ -380,13 +461,9 @@ Vérifie l'existence d'un étudiant dans la base de données (utilisé avant le 
 {
   "nom_admin": "Idrissi",
   "prenom_admin": "Omar",
-  "email": "admin@fsmek.ma"
+  "email_admin": "admin@fsmek.ma",
+  "password_admin": "motdepasse123"
 }
-```
-
-**Réponse `201`**
-```json
-{ "id": 1, "nom_admin": "Idrissi", "prenom_admin": "Omar", "email": "admin@fsmek.ma" }
 ```
 
 ---
@@ -397,6 +474,9 @@ Vérifie l'existence d'un étudiant dans la base de données (utilisé avant le 
 |---------|----------|-------------|
 | `GET` | `/api/planifications/` | Liste toutes les planifications |
 | `POST` | `/api/planifications/` | Créer une planification |
+| `PUT` | `/api/planifications/{id}/` | Modifier une planification (admin only) |
+| `PATCH` | `/api/planifications/{id}/` | Modifier partiellement (admin only) |
+| `DELETE` | `/api/planifications/{id}/` | Supprimer une planification (admin only) |
 
 **POST body**
 ```json
@@ -411,9 +491,28 @@ Vérifie l'existence d'un étudiant dans la base de données (utilisé avant le 
 }
 ```
 
-**Réponse `201`**
+---
+
+### Mes Planifications (Enseignant)
+
+Les enseignants peuvent créer et gérer leurs propres planifications.
+
+| Méthode | Endpoint | Description |
+|---------|----------|-------------|
+| `POST` | `/api/mes-planifications/` | Créer une planification personnelle |
+| `PATCH` | `/api/mes-planifications/{id}/` | Modifier une de ses planifications |
+| `DELETE` | `/api/mes-planifications/{id}/` | Supprimer une de ses planifications |
+
+**POST body**
 ```json
-{ "id": 4, "enseignant": 1, "salle": 1, "filiere": 1, "jour": "vendredi", "heure_debut": "10:00:00", "heure_fin": "12:00:00" }
+{
+  "salle": 2,
+  "filiere": 3,
+  "module": "Algorithmique",
+  "jour": "samedi",
+  "heure_debut": "14:00:00",
+  "heure_fin": "16:00:00"
+}
 ```
 
 ---
@@ -423,17 +522,7 @@ Vérifie l'existence d'un étudiant dans la base de données (utilisé avant le 
 | Méthode | Endpoint | Description |
 |---------|----------|-------------|
 | `GET` | `/api/seances/` | Liste toutes les séances |
-| `POST` | `/api/seances/` | Créer une séance |
-
-**POST body**
-```json
-{ "planification": 4 }
-```
-
-**Réponse `201`**
-```json
-{ "id": 1, "planification": 4, "date": "2026-05-22" }
-```
+| `DELETE` | `/api/seances/{id}/` | Supprimer une séance (enseignant only) |
 
 ---
 
@@ -442,17 +531,6 @@ Vérifie l'existence d'un étudiant dans la base de données (utilisé avant le 
 | Méthode | Endpoint | Description |
 |---------|----------|-------------|
 | `GET` | `/api/qrcodes/` | Liste tous les QR Codes |
-| `POST` | `/api/qrcodes/` | Créer un QR Code |
-
-**POST body**
-```json
-{ "seance": 1 }
-```
-
-**Réponse `201`**
-```json
-{ "id": 1, "seance": 1, "token": "550e8400-...", "cree_a": "2026-05-22T10:42:00Z", "expiration": 1 }
-```
 
 ---
 
@@ -461,358 +539,119 @@ Vérifie l'existence d'un étudiant dans la base de données (utilisé avant le 
 | Méthode | Endpoint | Description |
 |---------|----------|-------------|
 | `GET` | `/api/presences/` | Liste toutes les présences |
-| `POST` | `/api/presences/` | Créer une présence manuellement |
-
-**POST body**
-```json
-{
-  "etudiant": 1,
-  "seance": 1,
-  "date_scan": "2026-05-22",
-  "heure_scan": "10:47:32"
-}
-```
-
-**Réponse `201`**
-```json
-{ "id": 1, "etudiant": 1, "seance": 1, "date_scan": "2026-05-22", "heure_scan": "10:47:32" }
-```
-
-
-===================================================================
-PUT-PATCH         /api/etudiants/{id}/    accesible par admin
-pour patch : envoyer seulement les champs a changer
-body :
-{
-    "nom_etudiant": "Alami",
-    "prenom_etudiant": "Youssef",
-    "email_etudiant": "youssef@test.com",
-    "password_etudiant": "123",
-    "CIE": "C123456",
-    "filier_etudiant": 1
-}
-reponse : 
-{
-    "id": 1,
-    "filier_etudiant_nom": "SDIA",
-    "nom_etudiant": "Alami",
-    "prenom_etudiant": "Youssef",
-    "email_etudiant": "youssef@test.com",
-    "password_etudiant": "123",
-    "CIE": "C123456",
-    "filier_etudiant": 1
-}
-
-DELETE            /api/etudiants/{id}/            accesible par admin
-
-=======================================================================
-PUT-PATCH         /api/enseignants/{id}/          accesible par admin
-pour patch : envoyer seulement les champs a changer
-body :
-{
-    "nom_enseignant": "Alami",
-    "prenom_enseignant": "Karim",
-    "email_enseignant": "karim.alami@gmail.com",
-    "password_enseignant": "nouveauMotDePasse123"
-}
-
-DELETE            /api/enseignants/{id}/          accesible par admin
-
-=======================================================================
-PUT-PATCH         /api/planifications/{id}/       accesible par admin
-pour patch : envoyer seulement les champs a changer
-body :
-{
-    "enseignant": 1,
-    "salle": 2,
-    "filiere": 3,
-    "module": "Algorithmique",
-    "jour": "lundi",
-    "heure_debut": "08:00:00",
-    "heure_fin": "10:00:00",
-    "semestre": "S6"
-}
-
-DELETE            /api/planifications/{id}/       accesible par admin
-
-========================================================================
-DELETE            /api/seances/{id}/         accesible par ensiegnant
-
-========================================================================
-DELETE            /api/presences/{id}/       accesible par ensiegnant
-
-========================================================================
-POST /api/auth/switch-role/
-Header : Authorization: Bearer <token_admin_enseignant> hnaya a drary token double 
-body :[
-  {
-      "role_voulu": "enseignant"
-  }
-  ou -------
-  {
-      "role_voulu": "admin"
-  }
-]
-reponse :
-{
-    "role_actif": "enseignant",
-    "access": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-}
-
-========================================================================
-GET /api/profile/
-Header : Authorization: Bearer <token>
-Body : aucun
-Réponse — étudiant :
-{
-    "id": 1,
-    "nom": "Benali",
-    "prenom": "Youssef",
-    "email": "youssef@gmail.com",
-    "CIE": "M33333",
-    "filiere": "SDIA",
-    "photo_url": "https://res.cloudinary.com/ton_cloud/image/upload/presenceqr/profiles/etudiants/etudiant_1.jpg",
-    "role": "etudiant"
-}
-
-========================================================================
-PATCH /api/profile/ — admin uniquement
-Header : Authorization: Bearer <token_admin>
-Body :
-{
-    "nom_administrateur": "Nouveau Nom",
-    "prenom_administrateur": "Nouveau Prénom",
-    "email_administrateur": "nouveau@gmail.com"
-}
-Réponse :
-{
-    "id": 1,
-    "nom": "Nouveau Nom",
-    "prenom": "Nouveau Prénom",
-    "email": "nouveau@gmail.com",
-    "photo_url": null,
-    "role": "admin"
-}
-
-========================================================================
-POST /api/profile/photo/
-Header : Authorization: Bearer <token>
-Body : form-data (pas JSON) 
-{
-  image (KEY , TYPE , VALUE)
-}
-Réponse :
-{
-    "message": "Photo mise à jour",
-    "photo_url": "https://res.cloudinary.com/ton_cloud/image/upload/presenceqr/profiles/etudiants/etudiant_1.jpg"
-}
-
-========================================================================
-DELETE /api/profile/photo/
-Header : Authorization: Bearer <token>
-Body : aucun
-Réponse :
-{
-    "message": "Photo supprimée"
-}
-
-========================================================================
-// Upload photo avec MultipartRequest
-var request = http.MultipartRequest(
-  'POST',
-  Uri.parse('$baseUrl/api/profile/photo/'),
-);
-request.headers['Authorization'] = 'Bearer $token';
-request.files.add(await http.MultipartFile.fromPath('photo', imageFile.path));
-
-var response = await request.send();
-
-
-
-cloudinary values : 
-Cloud Name: dwczeughr
-API Key: 931942575826598
-API Secret: MUJtdkvhwqaAjHjdq-ylxQhkAtk
-
-========================================================================
-## APIs modifiées & nouvelles
+| `DELETE` | `/api/presences/{id}/` | Supprimer une présence (enseignant only) |
 
 ---
 
-### 🔄 POST `/api/seances/generer/` — MODIFIÉE
+## Profil utilisateur
 
-**Header :** `Authorization: Bearer <token_enseignant>`
+### `GET /api/profile/`
 
-**Body :**
+Récupère le profil de l'utilisateur connecté.
+
+**Header requis**
+```
+Authorization: Bearer <token>
+```
+
+**Réponse étudiant (200)**
 ```json
 {
-    "planification_id": 1,
-    "latitude_prof": 33.8935,
-    "longitude_prof": -5.5473
+  "id": 1,
+  "nom": "Benali",
+  "prenom": "Youssef",
+  "email": "youssef@gmail.com",
+  "CIE": "M33333",
+  "filiere": "SDIA",
+  "photo_url": "https://res.cloudinary.com/.../etudiant_1.jpg",
+  "role": "etudiant"
 }
 ```
 
-**Réponse (200) :**
+**Réponse enseignant (200)**
 ```json
 {
-    "seance_id": 1,
-    "token": "uuid",
-    "expire_dans": 60
+  "id": 2,
+  "nom": "Alami",
+  "prenom": "Karim",
+  "email": "karim@gmail.com",
+  "photo_url": null,
+  "role": "enseignant"
 }
 ```
 
-**Erreurs :**
+**Réponse admin (200)**
 ```json
-{ "error": "latitude_prof et longitude_prof obligatoires" }  // 400
-{ "error": "Token manquant" }                                // 401
-{ "error": "Accès réservé aux enseignants" }                 // 403
-{ "error": "Planification introuvable" }                     // 404
-{ "error": "Cette planification ne vous appartient pas" }    // 403
+{
+  "id": 1,
+  "nom": "Dupont",
+  "prenom": "Admin",
+  "email": "admin@gmail.com",
+  "photo_url": null,
+  "role": "admin"
+}
 ```
 
 ---
 
-### 🔄 POST `/api/presences/scanner/` — MODIFIÉE
+### `PATCH /api/profile/` (Admin uniquement)
 
-**Header :** aucun (public)
+Modifie le profil de l'admin connecté.
 
-**Body :**
+**Header requis**
+```
+Authorization: Bearer <token_admin>
+```
+
+**Body** *(tous les champs optionnels)*
 ```json
 {
-    "token": "uuid-du-qrcode",
-    "CIE": "M33333",
-    "latitude_etudiant": 33.8935,
-    "longitude_etudiant": -5.5474
+  "nom_administrateur": "Nouveau Nom",
+  "prenom_administrateur": "Nouveau Prénom",
+  "email_administrateur": "nouveau@gmail.com"
 }
 ```
 
-**Réponse succès (200) :**
+**Réponse (200)**
 ```json
 {
-    "status": "success",
-    "message": "Présence enregistrée pour Youssef Benali",
-    "heure": "10:48:32"
+  "id": 1,
+  "nom": "Nouveau Nom",
+  "prenom": "Nouveau Prénom",
+  "email": "nouveau@gmail.com",
+  "photo_url": null,
+  "role": "admin"
 }
-```
-
-**Erreurs :**
-```json
-{ "error": "token, CIE, latitude_etudiant et longitude_etudiant obligatoires" }  // 400
-{ "error": "QR Code invalide" }                                                   // 404
-{ "error": "QR Code expiré" }                                                     // 400
-{ "error": "Vous êtes trop loin du QR Code (127m). Vous devez être dans la salle." } // 403
-{ "error": "CIE introuvable" }                                                    // 404
-{ "error": "Présence déjà enregistrée" }                                          // 400
-{ "error": "Présence déjà enregistrée depuis cet appareil" }                      // 400
 ```
 
 ---
 
-### 🆕 GET `/api/profile/`
+## Photo de profil
 
-**Header :** `Authorization: Bearer <token>`
+### `POST /api/profile/photo/`
 
-**Body :** aucun
+Upload ou met à jour la photo de profil.
 
-**Réponse étudiant (200) :**
-```json
-{
-    "id": 1,
-    "nom": "Benali",
-    "prenom": "Youssef",
-    "email": "youssef@gmail.com",
-    "CIE": "M33333",
-    "filiere": "SDIA",
-    "photo_url": "https://res.cloudinary.com/.../etudiant_1.jpg",
-    "role": "etudiant"
-}
+**Header requis**
+```
+Authorization: Bearer <token>
 ```
 
-**Réponse enseignant (200) :**
-```json
-{
-    "id": 2,
-    "nom": "Alami",
-    "prenom": "Karim",
-    "email": "karim@gmail.com",
-    "photo_url": null,
-    "role": "enseignant"
-}
-```
-
-**Réponse admin (200) :**
-```json
-{
-    "id": 1,
-    "nom": "Dupont",
-    "prenom": "Admin",
-    "email": "admin@gmail.com",
-    "photo_url": null,
-    "role": "admin"
-}
-```
-
-**Erreurs :**
-```json
-{ "error": "Token invalide" }           // 401
-{ "error": "Utilisateur introuvable" }  // 404
-```
-
----
-
-### 🆕 PATCH `/api/profile/` — admin uniquement
-
-**Header :** `Authorization: Bearer <token_admin>`
-
-**Body :** *(tous les champs optionnels)*
-```json
-{
-    "nom_administrateur": "Nouveau Nom",
-    "prenom_administrateur": "Nouveau Prénom",
-    "email_administrateur": "nouveau@gmail.com"
-}
-```
-
-**Réponse (200) :**
-```json
-{
-    "id": 1,
-    "nom": "Nouveau Nom",
-    "prenom": "Nouveau Prénom",
-    "email": "nouveau@gmail.com",
-    "photo_url": null,
-    "role": "admin"
-}
-```
-
-**Erreurs :**
-```json
-{ "error": "Token invalide" }             // 401
-{ "error": "Modification non autorisée" } // 403 — étudiant ou enseignant
-{ "error": "Utilisateur introuvable" }    // 404
-```
-
----
-
-### 🆕 POST `/api/profile/photo/`
-
-**Header :** `Authorization: Bearer <token>`
-
-**Body :** `form-data`
+**Body** : `form-data` (pas JSON)
 
 | Key | Type | Value |
 |-----|------|-------|
 | `photo` | File | image.jpg / .png / .webp |
 
-**Réponse (200) :**
+**Réponse (200)**
 ```json
 {
-    "message": "Photo mise à jour",
-    "photo_url": "https://res.cloudinary.com/.../etudiant_1.jpg"
+  "message": "Photo mise à jour",
+  "photo_url": "https://res.cloudinary.com/.../etudiant_1.jpg"
 }
 ```
 
-**Erreurs :**
+**Erreurs**
 ```json
 { "error": "Token invalide" }                         // 401
 { "error": "Aucune image fournie" }                   // 400
@@ -823,101 +662,99 @@ API Secret: MUJtdkvhwqaAjHjdq-ylxQhkAtk
 
 ---
 
-### 🆕 DELETE `/api/profile/photo/`
+### `DELETE /api/profile/photo/`
 
-**Header :** `Authorization: Bearer <token>`
+Supprime la photo de profil.
 
-**Body :** aucun
+**Header requis**
+```
+Authorization: Bearer <token>
+```
 
-**Réponse (200) :**
+**Réponse (200)**
 ```json
 {
-    "message": "Photo supprimée"
+  "message": "Photo supprimée"
 }
 ```
 
-**Erreurs :**
-```json
-{ "error": "Token invalide" }           // 401
-{ "error": "Utilisateur introuvable" }  // 404
-```
+---
 
-==================================================================
-POST /api/mes-planifications/
-json{
-  "salle": 2,
-  "filiere": 3,
-  "jour": "samedi",
-  "heure_debut": "14:00:00",
-  "heure_fin": "16:00:00"
-}
-PATCH /api/mes-planifications/{id}/
-json{
-  "jour": "mercredi",
-  "heure_debut": "10:00:00",
-  "heure_fin": "12:00:00"
-}
-DELETE /api/mes-planifications/{id}/
-Body vide — status 200
+## Emploi du temps étudiant
 
-
-```markdown
-### GET /api/etudiants/emploi-du-temps/
+### `GET /api/etudiants/emploi-du-temps/`
 
 Récupère l'emploi du temps (planifications) de l'étudiant connecté, basé sur sa filière.
 
-**Accès :** Étudiant uniquement (token JWT requis)
+**Accès :** Étudiant uniquement
 
-**Headers**
+**Header requis**
 ```
 Authorization: Bearer <token_etudiant>
 ```
 
-**Réponse succès — 200 OK**
+**Réponse (200)**
 ```json
 {
-    "filiere": "SDIA",
-    "total": 4,
-    "planifications": [
-        {
-            "id": 13,
-            "jour": "lundi",
-            "heure_debut": "10:30:00",
-            "heure_fin": "12:30:00",
-            "module": "Stage",
-            "salle": "1.2",
-            "enseignant": "Youssef Alami"
-        },
-        {
-            "id": 14,
-            "jour": "mercredi",
-            "heure_debut": "08:30:00",
-            "heure_fin": "12:30:00",
-            "module": "Java",
-            "salle": "1.1",
-            "enseignant": "Mohammed Badaoui"
-        }
-    ]
+  "filiere": "SDIA",
+  "total": 4,
+  "planifications": [
+    {
+      "id": 13,
+      "jour": "lundi",
+      "heure_debut": "10:30:00",
+      "heure_fin": "12:30:00",
+      "module": "Stage",
+      "salle": "1.2",
+      "enseignant": "Youssef Alami"
+    },
+    {
+      "id": 14,
+      "jour": "mercredi",
+      "heure_debut": "08:30:00",
+      "heure_fin": "12:30:00",
+      "module": "Java",
+      "salle": "1.1",
+      "enseignant": "Mohammed Badaoui"
+    }
+  ]
 }
 ```
 
-**Réponses d'erreur**
+---
 
-| Code | Cas | Body |
-|------|-----|------|
-| 401 | Token manquant / expiré / invalide | `{ "detail": "Authentication credentials were not provided." }` |
-| 403 | Rôle ≠ étudiant | `{ "error": "Réservé aux étudiants" }` |
-| 404 | Étudiant introuvable | `{ "error": "Étudiant introuvable" }` |
+## Troubleshooting
 
-**Notes**
-- Les planifications sont triées automatiquement par jour (lundi → dimanche) puis par heure de début.
-- La filière de l'étudiant détermine quelles planifications sont retournées.
+### ❌ Erreur 401 "Token invalide" ou "Token expiré"
+
+**Solution :**
+1. Votre access token a expiré (durée de vie: 1 jour)
+2. Appelez `POST /api/auth/token/refresh/` avec votre refresh token
+3. Utilisez le nouvel access token pour les prochaines requêtes
+
+**Frontend:**
+```javascript
+// Implémentez un intercepteur HTTP
+if (response.status === 401) {
+  const newToken = await fetch('/api/auth/token/refresh/', {
+    method: 'POST',
+    body: JSON.stringify({ refresh: localStorage.getItem('refreshToken') })
+  }).then(r => r.json());
+  
+  localStorage.setItem('accessToken', newToken.access);
+  // Réessayez la requête avec le nouveau token
+}
 ```
 
-Et dans la table récapitulative des endpoints (si ton README en a une), ajoute une ligne :
+### ❌ Erreur 404 au lieu de 401
 
-```markdown
-| Méthode | Endpoint | Accès | Description |
-|---------|----------|-------|--------------|
-| GET | `/api/etudiants/emploi-du-temps/` | Étudiant | Emploi du temps de l'étudiant connecté |
-```
+Si vous recevez une 404 à la place d'une 401, c'est que l'endpoint `/api/auth/token/refresh/` n'existe pas. **Assurez-vous que votre backend est à jour** avec le code qui inclut cet endpoint.
+
+---
+
+## Notes de sécurité
+
+- 🔐 Ne stockez **jamais** les tokens en localStorage seul. Utilisez des cookies `httpOnly` si possible.
+- 🔄 Implémentez toujours un système de refresh automatique côté frontend.
+- 🚫 Les tokens refresh expirent après 7 jours. Au-delà, l'utilisateur doit se reconnecter.
+- 📝 L'access token a une durée de vie de 1 jour.
