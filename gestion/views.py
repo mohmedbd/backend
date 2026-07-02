@@ -167,7 +167,8 @@ class PresenceViewSet(viewsets.ModelViewSet):
         return super().destroy(request, *args, **kwargs)
 
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])
+@authentication_classes([])
+@permission_classes([AllowAny])
 def generer_seance_qr(request):
     planification_id = request.data.get('planification_id')
     latitude_prof    = request.data.get('latitude_prof')
@@ -221,7 +222,8 @@ def generer_seance_qr(request):
 
 
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@authentication_classes([])
+@permission_classes([AllowAny])
 def get_qrcode_seance(request, seance_id):
     # Décoder le token pour vérifier le rôle
     auth_header = request.headers.get('Authorization', '')
@@ -276,7 +278,8 @@ JOURS_MAP = {
 }
 
 @api_view(['GET'])
-@permission_classes([AllowAny]) 
+@authentication_classes([])
+@permission_classes([AllowAny])
 def planifications_du_jour(request):
     auth_header = request.headers.get('Authorization', '')
     if not auth_header.startswith('Bearer '):
@@ -325,6 +328,7 @@ def planifications_du_jour(request):
     })
 
 @api_view(['POST'])
+@authentication_classes([])
 @permission_classes([AllowAny])
 def verifier_etudiant(request):
     data = request.data
@@ -383,6 +387,8 @@ def verifier_etudiant(request):
     }, status=200)
 
 @api_view(['GET'])
+@authentication_classes([])
+@permission_classes([AllowAny])
 def liste_presences_seance(request, seance_id):
     
     import jwt
@@ -451,7 +457,8 @@ import openpyxl
 from django.conf import settings
 
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@authentication_classes([])
+@permission_classes([AllowAny])
 def export_seance_excel(request, seance_id):
 
     # Décoder le token JWT
@@ -566,6 +573,7 @@ def export_seance_excel(request, seance_id):
 from django.utils import timezone
 
 @api_view(['POST'])
+@authentication_classes([])
 @permission_classes([AllowAny])
 def scanner_presence(request):
     token_uuid = request.data.get('token')
@@ -868,6 +876,7 @@ def emploi_du_temps_etudiant(request):
     return Response(data, status=200)
 
 @api_view(['GET'])
+@authentication_classes([])
 @permission_classes([AllowAny])
 def home(request):
     return HttpResponse("Render works!")
