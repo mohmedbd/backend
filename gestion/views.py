@@ -29,7 +29,11 @@ def get_role_from_request(request):
     token_str = auth_header.split(' ')[1]
     try:
         payload = jwt.decode(token_str, settings.SECRET_KEY, algorithms=['HS256'])
-        return payload.get('role'), payload.get('user_id')
+        role = payload.get('role')
+        user_id = payload.get('user_id')
+        if role == 'admin_enseignant' and user_id is None:
+            user_id = payload.get('enseignant_id')
+        return role, user_id
     except jwt.ExpiredSignatureError:
         return None, None
     except jwt.InvalidTokenError:
@@ -132,7 +136,7 @@ class SeanceQRViewSet(viewsets.ModelViewSet):
 
     def destroy(self, request, *args, **kwargs):
         role, enseignant_id = get_role_from_request(request)
-        if role != 'enseignant':
+        if role not in ('enseignant', 'admin_enseignant'):
             return Response({'error': 'Réservé aux enseignants'}, status=403)
 
         seance = self.get_object()
@@ -156,7 +160,7 @@ class PresenceViewSet(viewsets.ModelViewSet):
 
     def destroy(self, request, *args, **kwargs):
         role, enseignant_id = get_role_from_request(request)
-        if role != 'enseignant':
+        if role not in ('enseignant', 'admin_enseignant'):
             return Response({'error': 'Réservé aux enseignants'}, status=403)
 
         presence = self.get_object()
@@ -194,8 +198,11 @@ def generer_seance_qr(request):
     except Exception:
         return Response({'error': 'Token invalide'}, status=status.HTTP_401_UNAUTHORIZED)
 
-    if role != 'enseignant':
+    if role not in ('enseignant', 'admin_enseignant'):
         return Response({'error': 'Accès réservé aux enseignants'}, status=status.HTTP_403_FORBIDDEN)
+
+    if user_id is None:
+        user_id = decoded.get('enseignant_id')
 
     try:
         enseignant = Enseignant.objects.get(id=user_id)
@@ -235,8 +242,11 @@ def get_qrcode_seance(request, seance_id):
     except Exception:
         return Response({'error': 'Token invalide'}, status=status.HTTP_401_UNAUTHORIZED)
 
-    if role != 'enseignant':
+    if role not in ('enseignant', 'admin_enseignant'):
         return Response({'error': 'Accès réservé aux enseignants'}, status=status.HTTP_403_FORBIDDEN)
+
+    if user_id is None:
+        user_id = decoded.get('enseignant_id')
 
     try:
         enseignant = Enseignant.objects.get(id=user_id)
@@ -289,13 +299,16 @@ def planifications_du_jour(request):
     try:
         token = AT(token_str)
         role  = token.get('role')
+        user_id = token.get('user_id')
     except Exception:
         return Response({'error': 'Token invalide'}, status=status.HTTP_401_UNAUTHORIZED)
 
-    if role != 'enseignant':
+    if role not in ('enseignant', 'admin_enseignant'):
         return Response({'error': 'Accès réservé aux enseignants'}, status=status.HTTP_403_FORBIDDEN)
 
-    user_id = token.get('user_id')
+    if user_id is None:
+        user_id = token.get('enseignant_id')
+
     try:
         enseignant = Enseignant.objects.get(id=user_id)
     except Enseignant.DoesNotExist:
@@ -407,10 +420,13 @@ def liste_presences_seance(request, seance_id):
     except jwt.InvalidTokenError:
         return Response({'error': 'Token invalide'}, status=401)
 
-    if payload.get('role') != 'enseignant':
+    role = payload.get('role')
+    if role not in ('enseignant', 'admin_enseignant'):
         return Response({'error': 'Accès réservé aux enseignants'}, status=403)
 
     enseignant_id = payload.get('user_id')
+    if enseignant_id is None:
+        enseignant_id = payload.get('enseignant_id')
 
     # Récupérer la séance
     try:
@@ -470,8 +486,11 @@ def export_seance_excel(request, seance_id):
     except Exception:
         return Response({'error': 'Token invalide'}, status=401)
 
-    if role != 'enseignant':
+    if role not in ('enseignant', 'admin_enseignant'):
         return Response({'error': 'Accès réservé aux enseignants'}, status=403)
+
+    if enseignant_id is None:
+        enseignant_id = payload.get('enseignant_id')
 
     # Récupérer la séance
     try:
