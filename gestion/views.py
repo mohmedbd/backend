@@ -628,7 +628,7 @@ def scanner_presence(request):
             float(seance.latitude_prof), float(seance.longitude_prof),
             float(latitude_etudiant), float(longitude_etudiant)
         )
-        if distance > 50:  # 50 metres
+        if distance > 150:  # 150 metres (augmenté pour GPS intérieur)
             return Response({
                 'error': f'Vous êtes trop loin du QR Code ({int(distance)}m). Vous devez être dans la salle.'
             }, status=403)
