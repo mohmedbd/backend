@@ -28,6 +28,8 @@ CORS_ALLOW_ALL_ORIGINS = True
 
 # Application definition
 
+AUTH_USER_MODEL = 'users.User'
+
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -80,7 +82,7 @@ DATABASES = {
     'default': dj_database_url.parse(
         config(
             'DATABASE_URL',
-            default='postgresql://neondb_owner:npg_OzXQMBR7yF2h@ep-nameless-unit-alxunnwm.c-3.eu-central-1.aws.neon.tech/neondb?sslmode=require'
+            default='postgresql://neondb_owner:npg_RWnZ7PLz1XjK@ep-ancient-block-asbscgez-pooler.c-4.eu-central-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require'
         )
     )
 }
@@ -138,10 +140,12 @@ SIMPLE_JWT = {
     'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
 }
 
-import cloudinary
-
-cloudinary.config(
-    cloud_name=config('CLOUDINARY_CLOUD_NAME'),
-    api_key=config('CLOUDINARY_API_KEY'),
-    api_secret=config('CLOUDINARY_API_SECRET'),
-)
+try:
+    import cloudinary
+    cloudinary.config(
+        cloud_name=config('CLOUDINARY_CLOUD_NAME', default=''),
+        api_key=config('CLOUDINARY_API_KEY', default=''),
+        api_secret=config('CLOUDINARY_API_SECRET', default=''),
+    )
+except ImportError:
+    pass
