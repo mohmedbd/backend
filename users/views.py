@@ -57,7 +57,7 @@ def get_user_profile_data(user):
     if user.has_role(Role.HEAD_OF_DEPARTMENT):
         profile = getattr(user, 'hod_profile', None)
         if profile:
-            data['department'] = profile.department_name
+            data['department'] = profile.department.nom_departement if profile.department else ''
 
     if user.has_role(Role.PROGRAM_MANAGER):
         profile = getattr(user, 'program_manager_profile', None)
@@ -218,7 +218,7 @@ def register(request):
     elif role == Role.PROFESSOR:
         extra['specialization'] = request.data.get('specialization', '')
     elif role == Role.HEAD_OF_DEPARTMENT:
-        extra['department_name'] = request.data.get('department_name', '')
+        extra['department_id'] = request.data.get('department_id')
     elif role == Role.PROGRAM_MANAGER:
         extra['program_name'] = request.data.get('program_name', '')
 

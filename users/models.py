@@ -224,7 +224,7 @@ class HeadOfDepartmentProfile(models.Model):
     can_view_all_department_data = models.BooleanField(default=True)
 
     def __str__(self):
-        return f"Chef Dept {self.department_name}: {self.user.email}"
+        return f"Chef Dept {self.department.nom_departement if self.department else 'N/A'}: {self.user.email}"
 
     class Meta:
         verbose_name = 'Profil Chef de Département'
