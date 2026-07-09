@@ -57,12 +57,202 @@ class FiliereViewSet(viewsets.ModelViewSet):
     queryset = Filiere.objects.all()
     serializer_class = FiliereSerializer
 
+    def get_queryset(self):
+        roles, user_id = get_role_from_request(self.request)
+        if not roles or not user_id:
+            return Filiere.objects.none()
+        try:
+            user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            return Filiere.objects.none()
+
+        active_roles = user.get_active_roles()
+        if Role.ADMIN in active_roles:
+            return Filiere.objects.all()
+        if Role.HEAD_OF_DEPARTMENT in active_roles:
+            hod = getattr(user, 'hod_profile', None)
+            if hod and hod.department_id:
+                return Filiere.objects.filter(departement_id=hod.department_id)
+            return Filiere.objects.none()
+        if Role.PROGRAM_MANAGER in active_roles:
+            pm = getattr(user, 'program_manager_profile', None)
+            if pm and pm.program_id:
+                return Filiere.objects.filter(id=pm.program_id)
+            return Filiere.objects.none()
+        return Filiere.objects.none()
+
+    def _can_write(self, user, filiere=None):
+        active_roles = user.get_active_roles()
+        if Role.ADMIN in active_roles:
+            return True
+        if Role.HEAD_OF_DEPARTMENT in active_roles:
+            hod = getattr(user, 'hod_profile', None)
+            if not hod or not hod.department_id:
+                return False
+            if filiere is not None:
+                return filiere.departement_id == hod.department_id
+            return True
+        if Role.PROGRAM_MANAGER in active_roles:
+            pm = getattr(user, 'program_manager_profile', None)
+            if not pm or not pm.program_id:
+                return False
+            if filiere is not None:
+                return filiere.id == pm.program_id
+            return True
+        return False
+
+    def list(self, request, *args, **kwargs):
+        roles, user_id = get_role_from_request(request)
+        if not roles or not user_id:
+            return Response({'error': 'Authentification requise'}, status=401)
+        return super().list(request, *args, **kwargs)
+
+    def create(self, request, *args, **kwargs):
+        roles, user_id = get_role_from_request(request)
+        if not roles or not user_id:
+            return Response({'error': 'Authentification requise'}, status=401)
+        try:
+            user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            return Response({'error': 'Utilisateur introuvable'}, status=404)
+        if not self._can_write(user):
+            return Response({'error': 'Acces non autorise'}, status=403)
+        return super().create(request, *args, **kwargs)
+
+    def update(self, request, *args, **kwargs):
+        roles, user_id = get_role_from_request(request)
+        if not roles or not user_id:
+            return Response({'error': 'Authentification requise'}, status=401)
+        try:
+            user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            return Response({'error': 'Utilisateur introuvable'}, status=404)
+        instance = self.get_object()
+        if not self._can_write(user, instance):
+            return Response({'error': 'Acces non autorise a cette filiere'}, status=403)
+        return super().update(request, *args, **kwargs)
+
+    def partial_update(self, request, *args, **kwargs):
+        roles, user_id = get_role_from_request(request)
+        if not roles or not user_id:
+            return Response({'error': 'Authentification requise'}, status=401)
+        try:
+            user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            return Response({'error': 'Utilisateur introuvable'}, status=404)
+        instance = self.get_object()
+        if not self._can_write(user, instance):
+            return Response({'error': 'Acces non autorise a cette filiere'}, status=403)
+        return super().partial_update(request, *args, **kwargs)
+
+    def destroy(self, request, *args, **kwargs):
+        roles, user_id = get_role_from_request(request)
+        if not roles or not user_id:
+            return Response({'error': 'Authentification requise'}, status=401)
+        try:
+            user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            return Response({'error': 'Utilisateur introuvable'}, status=404)
+        instance = self.get_object()
+        if not self._can_write(user, instance):
+            return Response({'error': 'Acces non autorise a cette filiere'}, status=403)
+        return super().destroy(request, *args, **kwargs)
+
 
 class DepartementViewSet(viewsets.ModelViewSet):
     authentication_classes = []
     permission_classes = [AllowAny]
     queryset = Departement.objects.all()
     serializer_class = DepartementSerializer
+
+    def get_queryset(self):
+        roles, user_id = get_role_from_request(self.request)
+        if not roles or not user_id:
+            return Departement.objects.none()
+        try:
+            user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            return Departement.objects.none()
+
+        active_roles = user.get_active_roles()
+        if Role.ADMIN in active_roles:
+            return Departement.objects.all()
+        if Role.HEAD_OF_DEPARTMENT in active_roles:
+            hod = getattr(user, 'hod_profile', None)
+            if hod and hod.department_id:
+                return Departement.objects.filter(id=hod.department_id)
+            return Departement.objects.none()
+        return Departement.objects.none()
+
+    def _can_write(self, user, dept=None):
+        active_roles = user.get_active_roles()
+        if Role.ADMIN in active_roles:
+            return True
+        if Role.HEAD_OF_DEPARTMENT in active_roles:
+            hod = getattr(user, 'hod_profile', None)
+            if not hod or not hod.department_id:
+                return False
+            if dept is not None:
+                return dept.id == hod.department_id
+            return True
+        return False
+
+    def list(self, request, *args, **kwargs):
+        roles, user_id = get_role_from_request(request)
+        if not roles or not user_id:
+            return Response({'error': 'Authentification requise'}, status=401)
+        return super().list(request, *args, **kwargs)
+
+    def create(self, request, *args, **kwargs):
+        roles, user_id = get_role_from_request(request)
+        if not roles or not user_id:
+            return Response({'error': 'Authentification requise'}, status=401)
+        try:
+            user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            return Response({'error': 'Utilisateur introuvable'}, status=404)
+        if not self._can_write(user):
+            return Response({'error': 'Acces non autorise'}, status=403)
+        return super().create(request, *args, **kwargs)
+
+    def update(self, request, *args, **kwargs):
+        roles, user_id = get_role_from_request(request)
+        if not roles or not user_id:
+            return Response({'error': 'Authentification requise'}, status=401)
+        try:
+            user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            return Response({'error': 'Utilisateur introuvable'}, status=404)
+        instance = self.get_object()
+        if not self._can_write(user, instance):
+            return Response({'error': 'Acces non autorise a ce departement'}, status=403)
+        return super().update(request, *args, **kwargs)
+
+    def partial_update(self, request, *args, **kwargs):
+        roles, user_id = get_role_from_request(request)
+        if not roles or not user_id:
+            return Response({'error': 'Authentification requise'}, status=401)
+        try:
+            user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            return Response({'error': 'Utilisateur introuvable'}, status=404)
+        instance = self.get_object()
+        if not self._can_write(user, instance):
+            return Response({'error': 'Acces non autorise a ce departement'}, status=403)
+        return super().partial_update(request, *args, **kwargs)
+
+    def destroy(self, request, *args, **kwargs):
+        roles, user_id = get_role_from_request(request)
+        if not roles or not user_id:
+            return Response({'error': 'Authentification requise'}, status=401)
+        try:
+            user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            return Response({'error': 'Utilisateur introuvable'}, status=404)
+        instance = self.get_object()
+        if not self._can_write(user, instance):
+            return Response({'error': 'Acces non autorise a ce departement'}, status=403)
+        return super().destroy(request, *args, **kwargs)
 
 
 class SalleViewSet(viewsets.ModelViewSet):
@@ -88,7 +278,7 @@ class AdminListViewSet(viewsets.ModelViewSet):
     def list(self, request, *args, **kwargs):
         roles, _ = get_role_from_request(request)
         if not has_role(roles, 'admin'):
-            return Response({'error': 'Reserve aux administrateurs'}, status=403)
+            return Response([], status=200)
         return super().list(request, *args, **kwargs)
 
     def create(self, request, *args, **kwargs):
@@ -196,7 +386,7 @@ class StudentListViewSet(viewsets.ModelViewSet):
     def list(self, request, *args, **kwargs):
         roles, _ = get_role_from_request(request)
         if not has_role(roles, 'admin'):
-            return Response({'error': 'Reserve aux administrateurs'}, status=403)
+            return Response([], status=200)
         return super().list(request, *args, **kwargs)
 
     def create(self, request, *args, **kwargs):
@@ -287,7 +477,7 @@ class ProfessorListViewSet(viewsets.ModelViewSet):
     def list(self, request, *args, **kwargs):
         roles, _ = get_role_from_request(request)
         if not has_role(roles, 'admin'):
-            return Response({'error': 'Reserve aux administrateurs'}, status=403)
+            return Response([], status=200)
         return super().list(request, *args, **kwargs)
 
     def create(self, request, *args, **kwargs):
@@ -375,7 +565,7 @@ class HeadOfDepartmentListViewSet(viewsets.ModelViewSet):
     def list(self, request, *args, **kwargs):
         roles, _ = get_role_from_request(request)
         if not has_role(roles, 'admin'):
-            return Response({'error': 'Reserve aux administrateurs'}, status=403)
+            return Response([], status=200)
         return super().list(request, *args, **kwargs)
 
     def create(self, request, *args, **kwargs):
@@ -486,7 +676,7 @@ class ProgramManagerListViewSet(viewsets.ModelViewSet):
     def list(self, request, *args, **kwargs):
         roles, _ = get_role_from_request(request)
         if not has_role(roles, 'admin'):
-            return Response({'error': 'Reserve aux administrateurs'}, status=403)
+            return Response([], status=200)
         return super().list(request, *args, **kwargs)
 
     def create(self, request, *args, **kwargs):
