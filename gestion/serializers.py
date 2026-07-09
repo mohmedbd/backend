@@ -65,8 +65,9 @@ class HeadOfDepartmentUserSerializer(serializers.ModelSerializer):
 
 
 class ProgramManagerUserSerializer(serializers.ModelSerializer):
-    program_name = serializers.CharField(source='program_manager_profile.program_name', read_only=True, allow_null=True)
+    program_id = serializers.IntegerField(source='program_manager_profile.program_id', read_only=True, allow_null=True)
+    program_name = serializers.CharField(source='program_manager_profile.program.nom_filiere', read_only=True, allow_null=True)
 
     class Meta:
         model = User
-        fields = ['id', 'email', 'first_name', 'last_name', 'photo_url', 'program_name']
+        fields = ['id', 'email', 'first_name', 'last_name', 'photo_url', 'program_id', 'program_name']

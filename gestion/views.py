@@ -88,25 +88,67 @@ class AdminListViewSet(viewsets.ModelViewSet):
         roles, _ = get_role_from_request(request)
         if not has_role(roles, 'admin'):
             return Response({'error': 'Reserve aux administrateurs'}, status=403)
-        return super().create(request, *args, **kwargs)
+        return self._create_user(request, Role.ADMIN)
 
     def update(self, request, *args, **kwargs):
         roles, _ = get_role_from_request(request)
         if not has_role(roles, 'admin'):
             return Response({'error': 'Reserve aux administrateurs'}, status=403)
-        return super().update(request, *args, **kwargs)
+        return self._update_user(request, *args, **kwargs)
 
     def partial_update(self, request, *args, **kwargs):
         roles, _ = get_role_from_request(request)
         if not has_role(roles, 'admin'):
             return Response({'error': 'Reserve aux administrateurs'}, status=403)
-        return super().partial_update(request, *args, **kwargs)
+        return self._update_user(request, *args, **kwargs)
 
     def destroy(self, request, *args, **kwargs):
         roles, _ = get_role_from_request(request)
         if not has_role(roles, 'admin'):
             return Response({'error': 'Reserve aux administrateurs'}, status=403)
         return super().destroy(request, *args, **kwargs)
+
+    def _create_user(self, request, role):
+        email = request.data.get('email')
+        password = request.data.get('password')
+        nom = request.data.get('last_name', '')
+        prenom = request.data.get('first_name', '')
+
+        if not email or not password:
+            return Response({'error': 'email et password obligatoires'}, status=400)
+
+        if User.objects.filter(email=email).exists():
+            return Response({'error': 'Email déjà utilisé'}, status=400)
+
+        user = User.objects.create_user(
+            email=email, password=password,
+            first_name=prenom, last_name=nom,
+        )
+
+        from users.views import create_role_assignments, create_profile_for_role
+        create_role_assignments(user, [role])
+        create_profile_for_role(user, role)
+
+        serializer = self.get_serializer(user)
+        return Response(serializer.data, status=201)
+
+    def _update_user(self, request, *args, **kwargs):
+        kwargs.pop('partial', False)
+        instance = self.get_object()
+        email = request.data.get('email', instance.email)
+        nom = request.data.get('last_name', instance.last_name)
+        prenom = request.data.get('first_name', instance.first_name)
+        password = request.data.get('password')
+
+        instance.email = email
+        instance.last_name = nom
+        instance.first_name = prenom
+        if password:
+            instance.set_password(password)
+        instance.save()
+
+        serializer = self.get_serializer(instance)
+        return Response(serializer.data)
 
 
 class StudentListViewSet(viewsets.ModelViewSet):
@@ -132,25 +174,72 @@ class StudentListViewSet(viewsets.ModelViewSet):
         roles, _ = get_role_from_request(request)
         if not has_role(roles, 'admin'):
             return Response({'error': 'Reserve aux administrateurs'}, status=403)
-        return super().create(request, *args, **kwargs)
+        return self._create_user(request, Role.STUDENT)
 
     def update(self, request, *args, **kwargs):
         roles, _ = get_role_from_request(request)
         if not has_role(roles, 'admin'):
             return Response({'error': 'Reserve aux administrateurs'}, status=403)
-        return super().update(request, *args, **kwargs)
+        return self._update_user(request, *args, **kwargs)
 
     def partial_update(self, request, *args, **kwargs):
         roles, _ = get_role_from_request(request)
         if not has_role(roles, 'admin'):
             return Response({'error': 'Reserve aux administrateurs'}, status=403)
-        return super().partial_update(request, *args, **kwargs)
+        return self._update_user(request, *args, **kwargs)
 
     def destroy(self, request, *args, **kwargs):
         roles, _ = get_role_from_request(request)
         if not has_role(roles, 'admin'):
             return Response({'error': 'Reserve aux administrateurs'}, status=403)
         return super().destroy(request, *args, **kwargs)
+
+    def _create_user(self, request, role):
+        email = request.data.get('email')
+        password = request.data.get('password')
+        nom = request.data.get('last_name', '')
+        prenom = request.data.get('first_name', '')
+        cie = request.data.get('CIE', request.data.get('code_massar', ''))
+        program_id = request.data.get('program_id') or request.data.get('filiere_id')
+
+        if not email or not password:
+            return Response({'error': 'email et password obligatoires'}, status=400)
+
+        if User.objects.filter(email=email).exists():
+            return Response({'error': 'Email déjà utilisé'}, status=400)
+
+        user = User.objects.create_user(
+            email=email, password=password,
+            first_name=prenom, last_name=nom,
+        )
+
+        from users.views import create_role_assignments, create_profile_for_role
+        create_role_assignments(user, [role])
+        create_profile_for_role(user, role, {
+            'CIE': cie,
+            'program_id': program_id,
+        })
+
+        serializer = self.get_serializer(user)
+        return Response(serializer.data, status=201)
+
+    def _update_user(self, request, *args, **kwargs):
+        kwargs.pop('partial', False)
+        instance = self.get_object()
+        email = request.data.get('email', instance.email)
+        nom = request.data.get('last_name', instance.last_name)
+        prenom = request.data.get('first_name', instance.first_name)
+        password = request.data.get('password')
+
+        instance.email = email
+        instance.last_name = nom
+        instance.first_name = prenom
+        if password:
+            instance.set_password(password)
+        instance.save()
+
+        serializer = self.get_serializer(instance)
+        return Response(serializer.data)
 
 
 class ProfessorListViewSet(viewsets.ModelViewSet):
@@ -176,25 +265,69 @@ class ProfessorListViewSet(viewsets.ModelViewSet):
         roles, _ = get_role_from_request(request)
         if not has_role(roles, 'admin'):
             return Response({'error': 'Reserve aux administrateurs'}, status=403)
-        return super().create(request, *args, **kwargs)
+        return self._create_user(request, Role.PROFESSOR)
 
     def update(self, request, *args, **kwargs):
         roles, _ = get_role_from_request(request)
         if not has_role(roles, 'admin'):
             return Response({'error': 'Reserve aux administrateurs'}, status=403)
-        return super().update(request, *args, **kwargs)
+        return self._update_user(request, *args, **kwargs)
 
     def partial_update(self, request, *args, **kwargs):
         roles, _ = get_role_from_request(request)
         if not has_role(roles, 'admin'):
             return Response({'error': 'Reserve aux administrateurs'}, status=403)
-        return super().partial_update(request, *args, **kwargs)
+        return self._update_user(request, *args, **kwargs)
 
     def destroy(self, request, *args, **kwargs):
         roles, _ = get_role_from_request(request)
         if not has_role(roles, 'admin'):
             return Response({'error': 'Reserve aux administrateurs'}, status=403)
         return super().destroy(request, *args, **kwargs)
+
+    def _create_user(self, request, role):
+        email = request.data.get('email')
+        password = request.data.get('password')
+        nom = request.data.get('last_name', '')
+        prenom = request.data.get('first_name', '')
+
+        if not email or not password:
+            return Response({'error': 'email et password obligatoires'}, status=400)
+
+        if User.objects.filter(email=email).exists():
+            return Response({'error': 'Email déjà utilisé'}, status=400)
+
+        user = User.objects.create_user(
+            email=email, password=password,
+            first_name=prenom, last_name=nom,
+        )
+
+        from users.views import create_role_assignments, create_profile_for_role
+        create_role_assignments(user, [role])
+        create_profile_for_role(user, role, {
+            'specialization': request.data.get('specialization', ''),
+        })
+
+        serializer = self.get_serializer(user)
+        return Response(serializer.data, status=201)
+
+    def _update_user(self, request, *args, **kwargs):
+        kwargs.pop('partial', False)
+        instance = self.get_object()
+        email = request.data.get('email', instance.email)
+        nom = request.data.get('last_name', instance.last_name)
+        prenom = request.data.get('first_name', instance.first_name)
+        password = request.data.get('password')
+
+        instance.email = email
+        instance.last_name = nom
+        instance.first_name = prenom
+        if password:
+            instance.set_password(password)
+        instance.save()
+
+        serializer = self.get_serializer(instance)
+        return Response(serializer.data)
 
 
 class HeadOfDepartmentListViewSet(viewsets.ModelViewSet):
@@ -220,25 +353,69 @@ class HeadOfDepartmentListViewSet(viewsets.ModelViewSet):
         roles, _ = get_role_from_request(request)
         if not has_role(roles, 'admin'):
             return Response({'error': 'Reserve aux administrateurs'}, status=403)
-        return super().create(request, *args, **kwargs)
+        return self._create_user(request, Role.HEAD_OF_DEPARTMENT)
 
     def update(self, request, *args, **kwargs):
         roles, _ = get_role_from_request(request)
         if not has_role(roles, 'admin'):
             return Response({'error': 'Reserve aux administrateurs'}, status=403)
-        return super().update(request, *args, **kwargs)
+        return self._update_user(request, *args, **kwargs)
 
     def partial_update(self, request, *args, **kwargs):
         roles, _ = get_role_from_request(request)
         if not has_role(roles, 'admin'):
             return Response({'error': 'Reserve aux administrateurs'}, status=403)
-        return super().partial_update(request, *args, **kwargs)
+        return self._update_user(request, *args, **kwargs)
 
     def destroy(self, request, *args, **kwargs):
         roles, _ = get_role_from_request(request)
         if not has_role(roles, 'admin'):
             return Response({'error': 'Reserve aux administrateurs'}, status=403)
         return super().destroy(request, *args, **kwargs)
+
+    def _create_user(self, request, role):
+        email = request.data.get('email')
+        password = request.data.get('password')
+        nom = request.data.get('last_name', '')
+        prenom = request.data.get('first_name', '')
+
+        if not email or not password:
+            return Response({'error': 'email et password obligatoires'}, status=400)
+
+        if User.objects.filter(email=email).exists():
+            return Response({'error': 'Email déjà utilisé'}, status=400)
+
+        user = User.objects.create_user(
+            email=email, password=password,
+            first_name=prenom, last_name=nom,
+        )
+
+        from users.views import create_role_assignments, create_profile_for_role
+        create_role_assignments(user, [role])
+        create_profile_for_role(user, role, {
+            'department_name': request.data.get('department_name', ''),
+        })
+
+        serializer = self.get_serializer(user)
+        return Response(serializer.data, status=201)
+
+    def _update_user(self, request, *args, **kwargs):
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        email = request.data.get('email', instance.email)
+        nom = request.data.get('last_name', instance.last_name)
+        prenom = request.data.get('first_name', instance.first_name)
+        password = request.data.get('password')
+
+        instance.email = email
+        instance.last_name = nom
+        instance.first_name = prenom
+        if password:
+            instance.set_password(password)
+        instance.save()
+
+        serializer = self.get_serializer(instance)
+        return Response(serializer.data)
 
 
 class ProgramManagerListViewSet(viewsets.ModelViewSet):
@@ -264,25 +441,77 @@ class ProgramManagerListViewSet(viewsets.ModelViewSet):
         roles, _ = get_role_from_request(request)
         if not has_role(roles, 'admin'):
             return Response({'error': 'Reserve aux administrateurs'}, status=403)
-        return super().create(request, *args, **kwargs)
+        return self._create_user(request, Role.PROGRAM_MANAGER)
 
     def update(self, request, *args, **kwargs):
         roles, _ = get_role_from_request(request)
         if not has_role(roles, 'admin'):
             return Response({'error': 'Reserve aux administrateurs'}, status=403)
-        return super().update(request, *args, **kwargs)
+        return self._update_user(request, *args, **kwargs)
 
     def partial_update(self, request, *args, **kwargs):
         roles, _ = get_role_from_request(request)
         if not has_role(roles, 'admin'):
             return Response({'error': 'Reserve aux administrateurs'}, status=403)
-        return super().partial_update(request, *args, **kwargs)
+        return self._update_user(request, *args, **kwargs)
 
     def destroy(self, request, *args, **kwargs):
         roles, _ = get_role_from_request(request)
         if not has_role(roles, 'admin'):
             return Response({'error': 'Reserve aux administrateurs'}, status=403)
         return super().destroy(request, *args, **kwargs)
+
+    def _create_user(self, request, role):
+        email = request.data.get('email')
+        password = request.data.get('password')
+        nom = request.data.get('last_name', '')
+        prenom = request.data.get('first_name', '')
+
+        if not email or not password:
+            return Response({'error': 'email et password obligatoires'}, status=400)
+
+        if User.objects.filter(email=email).exists():
+            return Response({'error': 'Email déjà utilisé'}, status=400)
+
+        user = User.objects.create_user(
+            email=email, password=password,
+            first_name=prenom, last_name=nom,
+        )
+
+        from users.views import create_role_assignments, create_profile_for_role
+        create_role_assignments(user, [role])
+        create_profile_for_role(user, role, {
+            'program_name': request.data.get('program_name', ''),
+            'program_id': request.data.get('program_id'),
+        })
+
+        serializer = self.get_serializer(user)
+        return Response(serializer.data, status=201)
+
+    def _update_user(self, request, *args, **kwargs):
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        email = request.data.get('email', instance.email)
+        nom = request.data.get('last_name', instance.last_name)
+        prenom = request.data.get('first_name', instance.first_name)
+        password = request.data.get('password')
+
+        instance.email = email
+        instance.last_name = nom
+        instance.first_name = prenom
+        if password:
+            instance.set_password(password)
+        instance.save()
+
+        program_id = request.data.get('program_id')
+        if program_id is not None:
+            profile = getattr(instance, 'program_manager_profile', None)
+            if profile:
+                profile.program_id = program_id
+                profile.save()
+
+        serializer = self.get_serializer(instance)
+        return Response(serializer.data)
 
 
 class PlanificationViewSet(viewsets.ModelViewSet):

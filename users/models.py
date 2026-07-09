@@ -230,7 +230,13 @@ class ProgramManagerProfile(models.Model):
     user = models.OneToOneField(
         User, on_delete=models.CASCADE, related_name='program_manager_profile'
     )
-    program_name = models.CharField(max_length=100)
+    program_name = models.CharField(max_length=100, blank=True)
+    program = models.ForeignKey(
+        'gestion.Filiere',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='program_managers',
+    )
     can_manage_students = models.BooleanField(default=True)
     can_manage_program_schedule = models.BooleanField(default=True)
     can_view_program_presences = models.BooleanField(default=True)

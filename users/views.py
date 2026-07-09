@@ -93,7 +93,10 @@ def create_profile_for_role(user, role, extra_data=None):
     elif role == Role.PROGRAM_MANAGER:
         ProgramManagerProfile.objects.get_or_create(
             user=user,
-            defaults={'program_name': extra_data.get('program_name', '')}
+            defaults={
+                'program_name': extra_data.get('program_name', ''),
+                'program_id': extra_data.get('program_id'),
+            }
         )
     elif role == Role.STUDENT:
         StudentProfile.objects.get_or_create(
