@@ -133,8 +133,30 @@ class AdminListViewSet(viewsets.ModelViewSet):
         )
 
         from users.views import create_role_assignments, create_profile_for_role
-        create_role_assignments(user, [role])
-        create_profile_for_role(user, role)
+        all_roles = [role]
+        extras = [{'role': role, 'data': {}}]
+
+        if request.data.get('also_professor'):
+            all_roles.append(Role.PROFESSOR)
+            extras.append({'role': Role.PROFESSOR, 'data': {
+                'specialization': request.data.get('specialization', ''),
+            }})
+
+        if request.data.get('also_head_of_department'):
+            all_roles.append(Role.HEAD_OF_DEPARTMENT)
+            extras.append({'role': Role.HEAD_OF_DEPARTMENT, 'data': {
+                'department_id': request.data.get('department_id'),
+            }})
+
+        if request.data.get('also_program_manager'):
+            all_roles.append(Role.PROGRAM_MANAGER)
+            extras.append({'role': Role.PROGRAM_MANAGER, 'data': {
+                'program_id': request.data.get('program_id'),
+            }})
+
+        create_role_assignments(user, all_roles)
+        for extra in extras:
+            create_profile_for_role(user, extra['role'], extra['data'])
 
         serializer = self.get_serializer(user)
         return Response(serializer.data, status=201)
@@ -398,10 +420,26 @@ class HeadOfDepartmentListViewSet(viewsets.ModelViewSet):
         )
 
         from users.views import create_role_assignments, create_profile_for_role
-        create_role_assignments(user, [role])
-        create_profile_for_role(user, role, {
+        all_roles = [role]
+        extras = [{'role': role, 'data': {
             'department_id': request.data.get('department_id'),
-        })
+        }}]
+
+        if request.data.get('also_professor'):
+            all_roles.append(Role.PROFESSOR)
+            extras.append({'role': Role.PROFESSOR, 'data': {
+                'specialization': request.data.get('specialization', ''),
+            }})
+
+        if request.data.get('also_program_manager'):
+            all_roles.append(Role.PROGRAM_MANAGER)
+            extras.append({'role': Role.PROGRAM_MANAGER, 'data': {
+                'program_id': request.data.get('program_id'),
+            }})
+
+        create_role_assignments(user, all_roles)
+        for extra in extras:
+            create_profile_for_role(user, extra['role'], extra['data'])
 
         serializer = self.get_serializer(user)
         return Response(serializer.data, status=201)
@@ -493,11 +531,21 @@ class ProgramManagerListViewSet(viewsets.ModelViewSet):
         )
 
         from users.views import create_role_assignments, create_profile_for_role
-        create_role_assignments(user, [role])
-        create_profile_for_role(user, role, {
+        all_roles = [role]
+        extras = [{'role': role, 'data': {
             'program_name': request.data.get('program_name', ''),
             'program_id': request.data.get('program_id'),
-        })
+        }}]
+
+        if request.data.get('also_professor'):
+            all_roles.append(Role.PROFESSOR)
+            extras.append({'role': Role.PROFESSOR, 'data': {
+                'specialization': request.data.get('specialization', ''),
+            }})
+
+        create_role_assignments(user, all_roles)
+        for extra in extras:
+            create_profile_for_role(user, extra['role'], extra['data'])
 
         serializer = self.get_serializer(user)
         return Response(serializer.data, status=201)
