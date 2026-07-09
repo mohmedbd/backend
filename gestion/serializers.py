@@ -1,8 +1,6 @@
 from rest_framework import serializers
-from .models import (
-    Filiere, Salle, Enseignant, Administrateur,
-    Etudiant, Planification, SeanceQR, QRCode, Presence
-)
+from .models import Filiere, Salle, Planification, SeanceQR, QRCode, Presence
+from users.models import User, StudentProfile
 
 
 class FiliereSerializer(serializers.ModelSerializer):
@@ -14,26 +12,6 @@ class FiliereSerializer(serializers.ModelSerializer):
 class SalleSerializer(serializers.ModelSerializer):
     class Meta:
         model = Salle
-        fields = '__all__'
-
-
-class EnseignantSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Enseignant
-        fields = '__all__'
-
-
-class AdministrateurSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Administrateur
-        fields = '__all__'
-
-
-class EtudiantSerializer(serializers.ModelSerializer):
-    filier_etudiant_nom = serializers.StringRelatedField(source='filier_etudiant', read_only=True)
-
-    class Meta:
-        model  = Etudiant
         fields = '__all__'
 
 
@@ -59,3 +37,20 @@ class PresenceSerializer(serializers.ModelSerializer):
     class Meta:
         model = Presence
         fields = '__all__'
+
+
+class StudentUserSerializer(serializers.ModelSerializer):
+    CIE = serializers.CharField(source='student_profile.CIE', read_only=True)
+    filiere = serializers.CharField(source='student_profile.program.nom_filiere', read_only=True, allow_null=True)
+
+    class Meta:
+        model = User
+        fields = ['id', 'email', 'first_name', 'last_name', 'photo_url', 'CIE', 'filiere']
+
+
+class ProfessorUserSerializer(serializers.ModelSerializer):
+    specialization = serializers.CharField(source='professor_profile.specialization', read_only=True, allow_null=True)
+
+    class Meta:
+        model = User
+        fields = ['id', 'email', 'first_name', 'last_name', 'photo_url', 'specialization']
