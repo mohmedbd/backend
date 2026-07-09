@@ -88,7 +88,9 @@ def create_profile_for_role(user, role, extra_data=None):
     elif role == Role.HEAD_OF_DEPARTMENT:
         HeadOfDepartmentProfile.objects.get_or_create(
             user=user,
-            defaults={'department_name': extra_data.get('department_name', '')}
+            defaults={
+                'department_id': extra_data.get('department_id'),
+            }
         )
     elif role == Role.PROGRAM_MANAGER:
         ProgramManagerProfile.objects.get_or_create(

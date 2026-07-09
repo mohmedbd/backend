@@ -213,7 +213,12 @@ class HeadOfDepartmentProfile(models.Model):
     user = models.OneToOneField(
         User, on_delete=models.CASCADE, related_name='hod_profile'
     )
-    department_name = models.CharField(max_length=100)
+    department = models.ForeignKey(
+        'gestion.Departement',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='heads_of_department',
+    )
     can_manage_professors = models.BooleanField(default=True)
     can_manage_schedules = models.BooleanField(default=True)
     can_view_all_department_data = models.BooleanField(default=True)

@@ -3,10 +3,21 @@ import uuid
 from django.conf import settings
 
 
+class Departement(models.Model):
+    nom_departement = models.CharField(max_length=100, unique=True)
+    description = models.TextField(blank=True)
+
+    def __str__(self):
+        return self.nom_departement
+
+
 class Filiere(models.Model):
     nom_filiere         = models.CharField(max_length=30)
     semester_filiere    = models.CharField(max_length=30)
-    departement_filiere = models.CharField(max_length=30)
+    departement         = models.ForeignKey(
+        Departement, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='filieres'
+    )
 
     def __str__(self):
         return self.nom_filiere

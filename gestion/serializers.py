@@ -1,12 +1,20 @@
 from rest_framework import serializers
-from .models import Filiere, Salle, Planification, SeanceQR, QRCode, Presence
+from .models import Departement, Filiere, Salle, Planification, SeanceQR, QRCode, Presence
 from users.models import User, StudentProfile
 
 
+class DepartementSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Departement
+        fields = '__all__'
+
+
 class FiliereSerializer(serializers.ModelSerializer):
+    departement_name = serializers.CharField(source='departement.nom_departement', read_only=True, allow_null=True)
+
     class Meta:
         model = Filiere
-        fields = '__all__'
+        fields = ['id', 'nom_filiere', 'semester_filiere', 'departement', 'departement_name']
 
 
 class SalleSerializer(serializers.ModelSerializer):
@@ -57,11 +65,12 @@ class ProfessorUserSerializer(serializers.ModelSerializer):
 
 
 class HeadOfDepartmentUserSerializer(serializers.ModelSerializer):
-    department_name = serializers.CharField(source='hod_profile.department_name', read_only=True, allow_null=True)
+    department_id = serializers.IntegerField(source='hod_profile.department_id', read_only=True, allow_null=True)
+    department_name = serializers.CharField(source='hod_profile.department.nom_departement', read_only=True, allow_null=True)
 
     class Meta:
         model = User
-        fields = ['id', 'email', 'first_name', 'last_name', 'photo_url', 'department_name']
+        fields = ['id', 'email', 'first_name', 'last_name', 'photo_url', 'department_id', 'department_name']
 
 
 class ProgramManagerUserSerializer(serializers.ModelSerializer):

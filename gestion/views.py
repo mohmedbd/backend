@@ -9,9 +9,9 @@ from django.utils import timezone
 from datetime import timedelta
 from rest_framework_simplejwt.tokens import AccessToken as AT
 
-from .models import Filiere, Salle, Planification, SeanceQR, QRCode, Presence
+from .models import Departement, Filiere, Salle, Planification, SeanceQR, QRCode, Presence
 from .serializers import (
-    FiliereSerializer, SalleSerializer,
+    DepartementSerializer, FiliereSerializer, SalleSerializer,
     PlanificationSerializer, SeanceQRSerializer,
     QRCodeSerializer, PresenceSerializer,
     StudentUserSerializer, ProfessorUserSerializer,
@@ -56,6 +56,13 @@ class FiliereViewSet(viewsets.ModelViewSet):
     permission_classes = [AllowAny]
     queryset = Filiere.objects.all()
     serializer_class = FiliereSerializer
+
+
+class DepartementViewSet(viewsets.ModelViewSet):
+    authentication_classes = []
+    permission_classes = [AllowAny]
+    queryset = Departement.objects.all()
+    serializer_class = DepartementSerializer
 
 
 class SalleViewSet(viewsets.ModelViewSet):
@@ -393,7 +400,7 @@ class HeadOfDepartmentListViewSet(viewsets.ModelViewSet):
         from users.views import create_role_assignments, create_profile_for_role
         create_role_assignments(user, [role])
         create_profile_for_role(user, role, {
-            'department_name': request.data.get('department_name', ''),
+            'department_id': request.data.get('department_id'),
         })
 
         serializer = self.get_serializer(user)
@@ -413,6 +420,13 @@ class HeadOfDepartmentListViewSet(viewsets.ModelViewSet):
         if password:
             instance.set_password(password)
         instance.save()
+
+        department_id = request.data.get('department_id')
+        if department_id is not None:
+            profile = getattr(instance, 'hod_profile', None)
+            if profile:
+                profile.department_id = department_id
+                profile.save()
 
         serializer = self.get_serializer(instance)
         return Response(serializer.data)

@@ -1,5 +1,6 @@
 from django.contrib import admin
 from .models import (
+    Departement,
     Filiere,
     Salle,
     Planification,
@@ -13,9 +14,15 @@ from users.models import (
 )
 
 
+@admin.register(Departement)
+class DepartementAdmin(admin.ModelAdmin):
+    list_display = ['nom_departement', 'description']
+    search_fields = ['nom_departement']
+
+
 @admin.register(Filiere)
 class FiliereAdmin(admin.ModelAdmin):
-    list_display = ['nom_filiere', 'semester_filiere', 'departement_filiere']
+    list_display = ['nom_filiere', 'semester_filiere', 'departement']
     search_fields = ['nom_filiere']
 
 
