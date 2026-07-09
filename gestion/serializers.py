@@ -54,3 +54,19 @@ class ProfessorUserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ['id', 'email', 'first_name', 'last_name', 'photo_url', 'specialization']
+
+
+class HeadOfDepartmentUserSerializer(serializers.ModelSerializer):
+    department_name = serializers.CharField(source='hod_profile.department_name', read_only=True, allow_null=True)
+
+    class Meta:
+        model = User
+        fields = ['id', 'email', 'first_name', 'last_name', 'photo_url', 'department_name']
+
+
+class ProgramManagerUserSerializer(serializers.ModelSerializer):
+    program_name = serializers.CharField(source='program_manager_profile.program_name', read_only=True, allow_null=True)
+
+    class Meta:
+        model = User
+        fields = ['id', 'email', 'first_name', 'last_name', 'photo_url', 'program_name']

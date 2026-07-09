@@ -15,10 +15,12 @@ from .serializers import (
     PlanificationSerializer, SeanceQRSerializer,
     QRCodeSerializer, PresenceSerializer,
     StudentUserSerializer, ProfessorUserSerializer,
+    HeadOfDepartmentUserSerializer, ProgramManagerUserSerializer,
 )
 from users.models import (
     User, RoleConfig, UserRoleAssignment, Role,
     AdminProfile, ProfessorProfile, StudentProfile,
+    HeadOfDepartmentProfile, ProgramManagerProfile,
 )
 
 import jwt
@@ -163,6 +165,94 @@ class ProfessorListViewSet(viewsets.ModelViewSet):
 
     def get_serializer_class(self):
         return ProfessorUserSerializer
+
+    def list(self, request, *args, **kwargs):
+        roles, _ = get_role_from_request(request)
+        if not has_role(roles, 'admin'):
+            return Response({'error': 'Reserve aux administrateurs'}, status=403)
+        return super().list(request, *args, **kwargs)
+
+    def create(self, request, *args, **kwargs):
+        roles, _ = get_role_from_request(request)
+        if not has_role(roles, 'admin'):
+            return Response({'error': 'Reserve aux administrateurs'}, status=403)
+        return super().create(request, *args, **kwargs)
+
+    def update(self, request, *args, **kwargs):
+        roles, _ = get_role_from_request(request)
+        if not has_role(roles, 'admin'):
+            return Response({'error': 'Reserve aux administrateurs'}, status=403)
+        return super().update(request, *args, **kwargs)
+
+    def partial_update(self, request, *args, **kwargs):
+        roles, _ = get_role_from_request(request)
+        if not has_role(roles, 'admin'):
+            return Response({'error': 'Reserve aux administrateurs'}, status=403)
+        return super().partial_update(request, *args, **kwargs)
+
+    def destroy(self, request, *args, **kwargs):
+        roles, _ = get_role_from_request(request)
+        if not has_role(roles, 'admin'):
+            return Response({'error': 'Reserve aux administrateurs'}, status=403)
+        return super().destroy(request, *args, **kwargs)
+
+
+class HeadOfDepartmentListViewSet(viewsets.ModelViewSet):
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+    def get_queryset(self):
+        return User.objects.filter(
+            role_assignments__role__codename='head_of_department',
+            role_assignments__is_active=True
+        )
+
+    def get_serializer_class(self):
+        return HeadOfDepartmentUserSerializer
+
+    def list(self, request, *args, **kwargs):
+        roles, _ = get_role_from_request(request)
+        if not has_role(roles, 'admin'):
+            return Response({'error': 'Reserve aux administrateurs'}, status=403)
+        return super().list(request, *args, **kwargs)
+
+    def create(self, request, *args, **kwargs):
+        roles, _ = get_role_from_request(request)
+        if not has_role(roles, 'admin'):
+            return Response({'error': 'Reserve aux administrateurs'}, status=403)
+        return super().create(request, *args, **kwargs)
+
+    def update(self, request, *args, **kwargs):
+        roles, _ = get_role_from_request(request)
+        if not has_role(roles, 'admin'):
+            return Response({'error': 'Reserve aux administrateurs'}, status=403)
+        return super().update(request, *args, **kwargs)
+
+    def partial_update(self, request, *args, **kwargs):
+        roles, _ = get_role_from_request(request)
+        if not has_role(roles, 'admin'):
+            return Response({'error': 'Reserve aux administrateurs'}, status=403)
+        return super().partial_update(request, *args, **kwargs)
+
+    def destroy(self, request, *args, **kwargs):
+        roles, _ = get_role_from_request(request)
+        if not has_role(roles, 'admin'):
+            return Response({'error': 'Reserve aux administrateurs'}, status=403)
+        return super().destroy(request, *args, **kwargs)
+
+
+class ProgramManagerListViewSet(viewsets.ModelViewSet):
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+    def get_queryset(self):
+        return User.objects.filter(
+            role_assignments__role__codename='program_manager',
+            role_assignments__is_active=True
+        )
+
+    def get_serializer_class(self):
+        return ProgramManagerUserSerializer
 
     def list(self, request, *args, **kwargs):
         roles, _ = get_role_from_request(request)

@@ -3,7 +3,8 @@ from rest_framework.routers import DefaultRouter
 from .views import generer_seance_qr, get_qrcode_seance, planifications_du_jour
 from .views import (
     FiliereViewSet, SalleViewSet, AdminListViewSet,
-    StudentListViewSet, ProfessorListViewSet, PlanificationViewSet,
+    StudentListViewSet, ProfessorListViewSet, HeadOfDepartmentListViewSet,
+    ProgramManagerListViewSet, PlanificationViewSet,
     SeanceQRViewSet, QRCodeViewSet, PresenceViewSet
 )
 from .views import (
@@ -18,6 +19,8 @@ router.register(r'salles', SalleViewSet)
 router.register(r'administrateurs', AdminListViewSet, basename='administrateur')
 router.register(r'enseignants', ProfessorListViewSet, basename='enseignant')
 router.register(r'etudiants', StudentListViewSet, basename='etudiant')
+router.register(r'chefs-departement', HeadOfDepartmentListViewSet, basename='chef_departement')
+router.register(r'responsables-filiere', ProgramManagerListViewSet, basename='responsable_filiere')
 router.register(r'planifications', PlanificationViewSet)
 router.register(r'seances', SeanceQRViewSet)
 router.register(r'qrcodes', QRCodeViewSet)
