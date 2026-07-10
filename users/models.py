@@ -200,6 +200,11 @@ class ProfessorProfile(models.Model):
     can_create_seances = models.BooleanField(default=True)
     can_scan_qr = models.BooleanField(default=False)
     can_export_presences = models.BooleanField(default=True)
+    departements = models.ManyToManyField(
+        'gestion.Departement',
+        blank=True,
+        related_name='professors',
+    )
 
     def __str__(self):
         return f"Profil Enseignant: {self.user.email}"

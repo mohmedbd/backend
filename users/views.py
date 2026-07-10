@@ -81,10 +81,19 @@ def create_profile_for_role(user, role, extra_data=None):
     if role == Role.ADMIN:
         AdminProfile.objects.get_or_create(user=user)
     elif role == Role.PROFESSOR:
-        ProfessorProfile.objects.get_or_create(
+        profile, created = ProfessorProfile.objects.get_or_create(
             user=user,
             defaults={'specialization': extra_data.get('specialization', '')}
         )
+        if not created and extra_data.get('specialization', ''):
+            profile.specialization = extra_data.get('specialization', '')
+            profile.save()
+        dept_ids = extra_data.get('department_ids') or extra_data.get('departement_ids')
+        if dept_ids:
+            if isinstance(dept_ids, list):
+                profile.departements.set(dept_ids)
+            else:
+                profile.departements.add(dept_ids)
     elif role == Role.HEAD_OF_DEPARTMENT:
         HeadOfDepartmentProfile.objects.get_or_create(
             user=user,

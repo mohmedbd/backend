@@ -375,42 +375,86 @@ class StudentListViewSet(viewsets.ModelViewSet):
     permission_classes = [AllowAny]
 
     def get_queryset(self):
-        return User.objects.filter(
+        qs = User.objects.filter(
             role_assignments__role__codename='student',
             role_assignments__is_active=True
         )
+        roles, user_id = get_role_from_request(self.request)
+        if not roles or not user_id:
+            return qs.none()
+        if has_role(roles, 'admin'):
+            return qs
+        if has_role(roles, 'head_of_department'):
+            try:
+                user = User.objects.get(id=user_id)
+            except User.DoesNotExist:
+                return qs.none()
+            hod = getattr(user, 'hod_profile', None)
+            if hod and hod.department_id:
+                return qs.filter(
+                    student_profile__program__departement_id=hod.department_id
+                )
+            return qs.none()
+        return qs.none()
 
     def get_serializer_class(self):
         return StudentUserSerializer
 
     def list(self, request, *args, **kwargs):
         roles, _ = get_role_from_request(request)
-        if not has_role(roles, 'admin'):
+        if not roles:
             return Response([], status=200)
         return super().list(request, *args, **kwargs)
 
+    def _get_hod_dept_id(self, request):
+        roles, user_id = get_role_from_request(request)
+        if not roles or not user_id:
+            return None
+        if has_role(roles, 'head_of_department'):
+            try:
+                user = User.objects.get(id=user_id)
+                hod = getattr(user, 'hod_profile', None)
+                return hod.department_id if hod else None
+            except User.DoesNotExist:
+                return None
+        if has_role(roles, 'admin'):
+            return '__admin__'
+        return None
+
+    def _can_access_student(self, request, student_user=None):
+        dept_id = self._get_hod_dept_id(request)
+        if dept_id == '__admin__':
+            return True
+        if dept_id:
+            if student_user:
+                sp = getattr(student_user, 'student_profile', None)
+                if sp and sp.program:
+                    return sp.program.departement_id == dept_id
+                return False
+            return True
+        return False
+
     def create(self, request, *args, **kwargs):
-        roles, _ = get_role_from_request(request)
-        if not has_role(roles, 'admin'):
-            return Response({'error': 'Reserve aux administrateurs'}, status=403)
+        if not self._can_access_student(request):
+            return Response({'error': 'Acces non autorise'}, status=403)
         return self._create_user(request, Role.STUDENT)
 
     def update(self, request, *args, **kwargs):
-        roles, _ = get_role_from_request(request)
-        if not has_role(roles, 'admin'):
-            return Response({'error': 'Reserve aux administrateurs'}, status=403)
+        instance = self.get_object()
+        if not self._can_access_student(request, instance):
+            return Response({'error': 'Acces non autorise a cet etudiant'}, status=403)
         return self._update_user(request, *args, **kwargs)
 
     def partial_update(self, request, *args, **kwargs):
-        roles, _ = get_role_from_request(request)
-        if not has_role(roles, 'admin'):
-            return Response({'error': 'Reserve aux administrateurs'}, status=403)
+        instance = self.get_object()
+        if not self._can_access_student(request, instance):
+            return Response({'error': 'Acces non autorise a cet etudiant'}, status=403)
         return self._update_user(request, *args, **kwargs)
 
     def destroy(self, request, *args, **kwargs):
-        roles, _ = get_role_from_request(request)
-        if not has_role(roles, 'admin'):
-            return Response({'error': 'Reserve aux administrateurs'}, status=403)
+        instance = self.get_object()
+        if not self._can_access_student(request, instance):
+            return Response({'error': 'Acces non autorise a cet etudiant'}, status=403)
         return super().destroy(request, *args, **kwargs)
 
     def _create_user(self, request, role):
@@ -466,45 +510,98 @@ class ProfessorListViewSet(viewsets.ModelViewSet):
     permission_classes = [AllowAny]
 
     def get_queryset(self):
-        return User.objects.filter(
+        qs = User.objects.filter(
             role_assignments__role__codename='professor',
             role_assignments__is_active=True
         )
+        roles, user_id = get_role_from_request(self.request)
+        if not roles or not user_id:
+            return qs.none()
+        if has_role(roles, 'admin'):
+            return qs
+        if has_role(roles, 'head_of_department'):
+            try:
+                user = User.objects.get(id=user_id)
+            except User.DoesNotExist:
+                return qs.none()
+            hod = getattr(user, 'hod_profile', None)
+            if hod and hod.department_id:
+                return qs.filter(
+                    professor_profile__departements=hod.department_id
+                )
+            return qs.none()
+        return qs.none()
 
     def get_serializer_class(self):
         return ProfessorUserSerializer
 
+    def _get_user_and_dept(self, request):
+        roles, user_id = get_role_from_request(request)
+        if not roles or not user_id:
+            return None, None
+        try:
+            user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            return None, None
+        hod_dept_id = None
+        if has_role(roles, 'head_of_department'):
+            hod = getattr(user, 'hod_profile', None)
+            if hod:
+                hod_dept_id = hod.department_id
+        return user, hod_dept_id
+
+    def _can_manage_professor(self, user, hod_dept_id, professor_user=None):
+        if Role.ADMIN in user.get_active_roles():
+            return True
+        if hod_dept_id:
+            if professor_user:
+                prof_profile = getattr(professor_user, 'professor_profile', None)
+                if not prof_profile:
+                    return False
+                return prof_profile.departements.filter(id=hod_dept_id).exists()
+            return True
+        return False
+
     def list(self, request, *args, **kwargs):
         roles, _ = get_role_from_request(request)
-        if not has_role(roles, 'admin'):
+        if not roles:
             return Response([], status=200)
         return super().list(request, *args, **kwargs)
 
     def create(self, request, *args, **kwargs):
-        roles, _ = get_role_from_request(request)
-        if not has_role(roles, 'admin'):
-            return Response({'error': 'Reserve aux administrateurs'}, status=403)
-        return self._create_user(request, Role.PROFESSOR)
+        user, hod_dept_id = self._get_user_and_dept(request)
+        if not user or not self._can_manage_professor(user, hod_dept_id):
+            return Response({'error': 'Acces non autorise'}, status=403)
+        return self._create_user(request, Role.PROFESSOR, hod_dept_id)
 
     def update(self, request, *args, **kwargs):
-        roles, _ = get_role_from_request(request)
-        if not has_role(roles, 'admin'):
-            return Response({'error': 'Reserve aux administrateurs'}, status=403)
+        user, hod_dept_id = self._get_user_and_dept(request)
+        if not user:
+            return Response({'error': 'Authentification requise'}, status=401)
+        instance = self.get_object()
+        if not self._can_manage_professor(user, hod_dept_id, instance):
+            return Response({'error': 'Acces non autorise a cet enseignant'}, status=403)
         return self._update_user(request, *args, **kwargs)
 
     def partial_update(self, request, *args, **kwargs):
-        roles, _ = get_role_from_request(request)
-        if not has_role(roles, 'admin'):
-            return Response({'error': 'Reserve aux administrateurs'}, status=403)
+        user, hod_dept_id = self._get_user_and_dept(request)
+        if not user:
+            return Response({'error': 'Authentification requise'}, status=401)
+        instance = self.get_object()
+        if not self._can_manage_professor(user, hod_dept_id, instance):
+            return Response({'error': 'Acces non autorise a cet enseignant'}, status=403)
         return self._update_user(request, *args, **kwargs)
 
     def destroy(self, request, *args, **kwargs):
-        roles, _ = get_role_from_request(request)
-        if not has_role(roles, 'admin'):
-            return Response({'error': 'Reserve aux administrateurs'}, status=403)
+        user, hod_dept_id = self._get_user_and_dept(request)
+        if not user:
+            return Response({'error': 'Authentification requise'}, status=401)
+        instance = self.get_object()
+        if not self._can_manage_professor(user, hod_dept_id, instance):
+            return Response({'error': 'Acces non autorise a cet enseignant'}, status=403)
         return super().destroy(request, *args, **kwargs)
 
-    def _create_user(self, request, role):
+    def _create_user(self, request, role, hod_dept_id=None):
         email = request.data.get('email')
         password = request.data.get('password')
         nom = request.data.get('last_name', '')
@@ -522,10 +619,17 @@ class ProfessorListViewSet(viewsets.ModelViewSet):
         )
 
         from users.views import create_role_assignments, create_profile_for_role
-        create_role_assignments(user, [role])
-        create_profile_for_role(user, role, {
+        extra_data = {
             'specialization': request.data.get('specialization', ''),
-        })
+        }
+        department_ids = request.data.get('department_ids')
+        if department_ids:
+            extra_data['department_ids'] = department_ids
+        elif hod_dept_id:
+            extra_data['department_ids'] = [hod_dept_id]
+
+        create_role_assignments(user, [role])
+        create_profile_for_role(user, role, extra_data)
 
         serializer = self.get_serializer(user)
         return Response(serializer.data, status=201)
@@ -544,6 +648,12 @@ class ProfessorListViewSet(viewsets.ModelViewSet):
         if password:
             instance.set_password(password)
         instance.save()
+
+        department_ids = request.data.get('department_ids')
+        if department_ids is not None:
+            profile = getattr(instance, 'professor_profile', None)
+            if profile:
+                profile.departements.set(department_ids)
 
         serializer = self.get_serializer(instance)
         return Response(serializer.data)

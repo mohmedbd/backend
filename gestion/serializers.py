@@ -58,10 +58,17 @@ class StudentUserSerializer(serializers.ModelSerializer):
 
 class ProfessorUserSerializer(serializers.ModelSerializer):
     specialization = serializers.CharField(source='professor_profile.specialization', read_only=True, allow_null=True)
+    department_ids = serializers.SerializerMethodField()
 
     class Meta:
         model = User
-        fields = ['id', 'email', 'first_name', 'last_name', 'photo_url', 'specialization']
+        fields = ['id', 'email', 'first_name', 'last_name', 'photo_url', 'specialization', 'department_ids']
+
+    def get_department_ids(self, obj):
+        profile = getattr(obj, 'professor_profile', None)
+        if profile:
+            return list(profile.departements.values_list('id', flat=True))
+        return []
 
 
 class HeadOfDepartmentUserSerializer(serializers.ModelSerializer):
