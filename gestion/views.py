@@ -562,6 +562,7 @@ class AdminListViewSet(viewsets.ModelViewSet):
             all_roles.append(Role.PROFESSOR)
             extras.append({'role': Role.PROFESSOR, 'data': {
                 'specialization': request.data.get('specialization', ''),
+                'department_ids': request.data.get('department_ids', []),
             }})
 
         if request.data.get('also_head_of_department'):
