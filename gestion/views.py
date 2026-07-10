@@ -1916,13 +1916,11 @@ def scanner_presence(request):
 
     module_ref = seance.planification.module_ref
     if module_ref:
-        is_enrolled_in_module = student_profile.modules.filter(id=module_ref.id).exists()
-        if not is_enrolled_in_module:
-            if not (student_profile.program_id and student_profile.program_id == seance.planification.filiere_id):
-                return Response({
-                    'error': 'Vous n\'etes pas inscrit dans ce module',
-                    'module': module_ref.nom_module,
-                }, status=403)
+        if not student_profile.modules.filter(id=module_ref.id).exists():
+            return Response({
+                'error': 'Vous n\'etes pas inscrit dans ce module',
+                'module': module_ref.nom_module,
+            }, status=403)
     else:
         if student_profile.program_id and student_profile.program_id != seance.planification.filiere_id:
             return Response({
