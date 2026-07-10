@@ -79,6 +79,12 @@ class FiliereViewSet(viewsets.ModelViewSet):
             if pm and pm.program_id:
                 return Filiere.objects.filter(id=pm.program_id)
             return Filiere.objects.none()
+        if Role.PROFESSOR in active_roles:
+            prof = getattr(user, 'professor_profile', None)
+            if prof:
+                dept_ids = prof.departements.values_list('id', flat=True)
+                return Filiere.objects.filter(departement_id__in=dept_ids)
+            return Filiere.objects.none()
         return Filiere.objects.none()
 
     def _can_write(self, user, filiere=None):
@@ -582,6 +588,16 @@ class StudentListViewSet(viewsets.ModelViewSet):
             if pm and pm.program_id:
                 return qs.filter(student_profile__program_id=pm.program_id)
             return qs.none()
+        if has_role(roles, 'professor'):
+            try:
+                user = User.objects.get(id=user_id)
+            except User.DoesNotExist:
+                return qs.none()
+            prof = getattr(user, 'professor_profile', None)
+            if prof:
+                dept_ids = prof.departements.values_list('id', flat=True)
+                return qs.filter(student_profile__program__departement_id__in=dept_ids)
+            return qs.none()
         return qs.none()
 
     def get_serializer_class(self):
@@ -591,7 +607,7 @@ class StudentListViewSet(viewsets.ModelViewSet):
         roles, _ = get_role_from_request(request)
         if not roles:
             return Response([], status=200)
-        if has_role(roles, 'head_of_department') or has_role(roles, 'admin') or has_role(roles, 'program_manager'):
+        if has_role(roles, 'head_of_department') or has_role(roles, 'admin') or has_role(roles, 'program_manager') or has_role(roles, 'professor'):
             return super().list(request, *args, **kwargs)
         return Response([], status=200)
 
@@ -1818,6 +1834,13 @@ def scanner_presence(request):
         student_profile = StudentProfile.objects.get(CIE=cie)
     except StudentProfile.DoesNotExist:
         return Response({'error': 'CIE introuvable'}, status=404)
+
+    if student_profile.program_id and student_profile.program_id != seance.planification.filiere_id:
+        return Response({
+            'error': 'Vous n\'etes pas inscrit dans cette filiere',
+            'filiere_etudiant': student_profile.program.nom_filiere if student_profile.program else '',
+            'filiere_seance': seance.planification.filiere.nom_filiere,
+        }, status=403)
 
     if Presence.objects.filter(student=student_profile.user, seance=seance).exists():
         return Response({'error': 'Presence deja enregistree'}, status=400)
