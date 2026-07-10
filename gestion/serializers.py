@@ -42,9 +42,14 @@ class SalleSerializer(serializers.ModelSerializer):
 
 
 class PlanificationSerializer(serializers.ModelSerializer):
+    module_name = serializers.CharField(read_only=True)
+    semestre_name = serializers.CharField(read_only=True)
+
     class Meta:
         model = Planification
-        fields = '__all__'
+        fields = ['id', 'professor', 'salle', 'filiere', 'semestre', 'module',
+                  'module_ref', 'module_name', 'semestre_name', 'jour',
+                  'heure_debut', 'heure_fin']
 
 
 class SeanceQRSerializer(serializers.ModelSerializer):

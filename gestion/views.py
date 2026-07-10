@@ -1206,6 +1206,14 @@ class PlanificationViewSet(viewsets.ModelViewSet):
                 return Response({'error': 'Acces non autorise'}, status=403)
             if int(filiere_id) != pm.program_id:
                 return Response({'error': 'Filiere hors de votre ressort'}, status=403)
+        semestre_id = request.data.get('semestre')
+        module_id = request.data.get('module')
+        if semestre_id and filiere_id:
+            if not Semestre.objects.filter(id=semestre_id, filiere_id=filiere_id).exists():
+                return Response({'error': 'Semestre invalide pour cette filiere'}, status=400)
+        if module_id and semestre_id:
+            if not Module.objects.filter(id=module_id, semestre_id=semestre_id).exists():
+                return Response({'error': 'Module invalide pour ce semestre'}, status=400)
         return super().create(request, *args, **kwargs)
 
     def update(self, request, *args, **kwargs):
@@ -1960,6 +1968,16 @@ def mes_planifications(request):
 
     data = request.data.copy()
     data['professor'] = professor_id
+
+    filiere_id = data.get('filiere')
+    semestre_id = data.get('semestre')
+    module_id = data.get('module')
+    if semestre_id and filiere_id:
+        if not Semestre.objects.filter(id=semestre_id, filiere_id=filiere_id).exists():
+            return Response({'error': 'Semestre invalide pour cette filiere'}, status=400)
+    if module_id and semestre_id:
+        if not Module.objects.filter(id=module_id, semestre_id=semestre_id).exists():
+            return Response({'error': 'Module invalide pour ce semestre'}, status=400)
 
     serializer = PlanificationSerializer(data=data)
     if serializer.is_valid():

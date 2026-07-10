@@ -68,7 +68,14 @@ class Planification(models.Model):
     )
     salle       = models.ForeignKey(Salle, on_delete=models.CASCADE)
     filiere     = models.ForeignKey(Filiere, on_delete=models.CASCADE)
-    module      = models.CharField(max_length=100)
+    semestre    = models.ForeignKey(
+        Semestre, on_delete=models.CASCADE, null=True, blank=True
+    )
+    module      = models.CharField(max_length=100, blank=True)
+    module_ref  = models.ForeignKey(
+        Module, on_delete=models.CASCADE, null=True, blank=True,
+        related_name='planifications'
+    )
     jour        = models.CharField(max_length=30)
     heure_debut = models.TimeField()
     heure_fin   = models.TimeField()
@@ -79,6 +86,14 @@ class Planification(models.Model):
     @property
     def professor_profile(self):
         return getattr(self.professor, 'professor_profile', None)
+
+    @property
+    def module_name(self):
+        return self.module_ref.nom_module if self.module_ref else self.module
+
+    @property
+    def semestre_name(self):
+        return self.semestre.nom_semestre if self.semestre else ''
 
 
 class SeanceQR(models.Model):
