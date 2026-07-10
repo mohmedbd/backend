@@ -710,7 +710,7 @@ class StudentListViewSet(viewsets.ModelViewSet):
         }
         if not user or not self._can_access_student(user, roles):
             logger.error(f"403 STUDENT DEBUG: {debug_info}")
-            return Response({'error': 'Acces non autorise', 'debug': debug_info}, status=403)
+            return Response({'debug': debug_info}, status=403)
         if has_role(roles, 'program_manager'):
             pm = getattr(user, 'program_manager_profile', None)
             if not pm or not pm.program_id:
