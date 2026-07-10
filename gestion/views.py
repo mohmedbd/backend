@@ -2348,5 +2348,136 @@ def etudiants_par_module(request):
 @api_view(['GET'])
 @authentication_classes([])
 @permission_classes([AllowAny])
+def absences(request):
+    roles, user_id = get_role_from_request(request)
+    if not roles or not user_id:
+        return Response({'error': 'Authentification requise'}, status=401)
+
+    seances = SeanceQR.objects.select_related(
+        'planification__professor',
+        'planification__filiere',
+        'planification__semestre',
+        'planification__module_ref',
+        'planification__salle',
+    )
+
+    if has_role(roles, 'admin'):
+        pass
+    elif has_role(roles, 'head_of_department'):
+        try:
+            user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            return Response({'error': 'Utilisateur introuvable'}, status=404)
+        hod = getattr(user, 'hod_profile', None)
+        if not hod or not hod.department_id:
+            return Response({'error': 'Acces non autorise'}, status=403)
+        seances = seances.filter(planification__filiere__departement_id=hod.department_id)
+    elif has_role(roles, 'program_manager'):
+        try:
+            user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            return Response({'error': 'Utilisateur introuvable'}, status=404)
+        pm = getattr(user, 'program_manager_profile', None)
+        if not pm or not pm.program_id:
+            return Response({'error': 'Acces non autorise'}, status=403)
+        seances = seances.filter(planification__filiere_id=pm.program_id)
+    elif has_role(roles, 'professor'):
+        seances = seances.filter(planification__professor_id=user_id)
+    else:
+        return Response({'error': 'Acces non autorise'}, status=403)
+
+    filiere_id = request.GET.get('filiere')
+    semestre_id = request.GET.get('semestre')
+    module_id = request.GET.get('module')
+    etudiant_id = request.GET.get('etudiant')
+    professeur_id = request.GET.get('professor')
+    date_debut = request.GET.get('date_debut')
+    date_fin = request.GET.get('date_fin')
+
+    if filiere_id:
+        seances = seances.filter(planification__filiere_id=filiere_id)
+    if semestre_id:
+        seances = seances.filter(planification__semestre_id=semestre_id)
+    if module_id:
+        seances = seances.filter(planification__module_ref_id=module_id)
+    if professeur_id:
+        seances = seances.filter(planification__professor_id=professeur_id)
+    if date_debut:
+        seances = seances.filter(date__gte=date_debut)
+    if date_fin:
+        seances = seances.filter(date__lte=date_fin)
+
+    seances = seances.order_by('-date', 'planification__heure_debut')
+
+    result = []
+    for seance in seances:
+        plan = seance.planification
+        module_ref = plan.module_ref
+        if not module_ref:
+            continue
+
+        enrolled = User.objects.filter(
+            role_assignments__role__codename='student',
+            role_assignments__is_active=True,
+            student_profile__modules=module_ref,
+        ).select_related('student_profile').order_by('last_name', 'first_name')
+
+        present_qs = Presence.objects.filter(seance=seance)
+        present_ids = set(present_qs.values_list('student_id', flat=True))
+        present_map = {p.student_id: p for p in present_qs.select_related('student')}
+
+        total_presents = 0
+        total_absents = 0
+        etudiants_data = []
+
+        for s in enrolled:
+            is_present = s.id in present_ids
+            if is_present:
+                total_presents += 1
+            else:
+                total_absents += 1
+
+            if etudiant_id and int(etudiant_id) != s.id:
+                continue
+
+            p = present_map.get(s.id)
+            etudiants_data.append({
+                'student_id': s.id,
+                'nom': s.last_name,
+                'prenom': s.first_name,
+                'CIE': getattr(s.student_profile, 'CIE', '') if hasattr(s, 'student_profile') else '',
+                'present': is_present,
+                'heure_scan': str(p.heure_scan) if p else None,
+            })
+
+        if not etudiants_data:
+            continue
+
+        result.append({
+            'seance_id': seance.id,
+            'date': str(seance.date),
+            'module': module_ref.nom_module,
+            'module_id': module_ref.id,
+            'filiere': plan.filiere.nom_filiere,
+            'filiere_id': plan.filiere.id,
+            'semestre': plan.semestre.nom_semestre if plan.semestre else '',
+            'semestre_id': plan.semestre.id if plan.semestre else None,
+            'professor': f"{plan.professor.first_name} {plan.professor.last_name}",
+            'professor_id': plan.professor.id,
+            'heure_debut': str(plan.heure_debut),
+            'heure_fin': str(plan.heure_fin),
+            'salle': plan.salle.nom_salle,
+            'total_presents': total_presents,
+            'total_absents': total_absents,
+            'total_enrolled': total_presents + total_absents,
+            'etudiants': etudiants_data,
+        })
+
+    return Response(result)
+
+
+@api_view(['GET'])
+@authentication_classes([])
+@permission_classes([AllowAny])
 def home(request):
     return HttpResponse("Render works!")
