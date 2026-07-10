@@ -9,9 +9,9 @@ from django.utils import timezone
 from datetime import timedelta
 from rest_framework_simplejwt.tokens import AccessToken as AT
 
-from .models import Departement, Filiere, Module, Salle, Planification, SeanceQR, QRCode, Presence
+from .models import Departement, Filiere, Semestre, Module, Salle, Planification, SeanceQR, QRCode, Presence
 from .serializers import (
-    DepartementSerializer, FiliereSerializer, ModuleSerializer, SalleSerializer,
+    DepartementSerializer, FiliereSerializer, SemestreSerializer, ModuleSerializer, SalleSerializer,
     PlanificationSerializer, SeanceQRSerializer,
     QRCodeSerializer, PresenceSerializer,
     StudentUserSerializer, ProfessorUserSerializer,
@@ -159,6 +159,95 @@ class FiliereViewSet(viewsets.ModelViewSet):
         return super().destroy(request, *args, **kwargs)
 
 
+class SemestreViewSet(viewsets.ModelViewSet):
+    authentication_classes = []
+    permission_classes = [AllowAny]
+    queryset = Semestre.objects.all()
+    serializer_class = SemestreSerializer
+
+    def get_queryset(self):
+        roles, user_id = get_role_from_request(self.request)
+        if not roles or not user_id:
+            return Semestre.objects.none()
+        try:
+            user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            return Semestre.objects.none()
+
+        active_roles = user.get_active_roles()
+        if Role.ADMIN in active_roles:
+            return Semestre.objects.all()
+        if Role.HEAD_OF_DEPARTMENT in active_roles:
+            hod = getattr(user, 'hod_profile', None)
+            if hod and hod.department_id:
+                return Semestre.objects.filter(filiere__departement_id=hod.department_id)
+            return Semestre.objects.none()
+        if Role.PROGRAM_MANAGER in active_roles:
+            pm = getattr(user, 'program_manager_profile', None)
+            if pm and pm.program_id:
+                return Semestre.objects.filter(filiere_id=pm.program_id)
+            return Semestre.objects.none()
+        return Semestre.objects.none()
+
+    def _can_write(self, user, semestre=None):
+        active_roles = user.get_active_roles()
+        if Role.ADMIN in active_roles:
+            return True
+        if Role.HEAD_OF_DEPARTMENT in active_roles:
+            hod = getattr(user, 'hod_profile', None)
+            if not hod or not hod.department_id:
+                return False
+            if semestre is not None:
+                return semestre.filiere.departement_id == hod.department_id
+            return True
+        if Role.PROGRAM_MANAGER in active_roles:
+            pm = getattr(user, 'program_manager_profile', None)
+            if not pm or not pm.program_id:
+                return False
+            if semestre is not None:
+                return semestre.filiere_id == pm.program_id
+            return True
+        return False
+
+    def create(self, request, *args, **kwargs):
+        roles, user_id = get_role_from_request(request)
+        if not roles or not user_id:
+            return Response({'error': 'Authentification requise'}, status=401)
+        try:
+            user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            return Response({'error': 'Utilisateur introuvable'}, status=404)
+        if not self._can_write(user):
+            return Response({'error': 'Acces non autorise'}, status=403)
+        return super().create(request, *args, **kwargs)
+
+    def update(self, request, *args, **kwargs):
+        roles, user_id = get_role_from_request(request)
+        if not roles or not user_id:
+            return Response({'error': 'Authentification requise'}, status=401)
+        try:
+            user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            return Response({'error': 'Utilisateur introuvable'}, status=404)
+        instance = self.get_object()
+        if not self._can_write(user, instance):
+            return Response({'error': 'Acces non autorise'}, status=403)
+        return super().update(request, *args, **kwargs)
+
+    def destroy(self, request, *args, **kwargs):
+        roles, user_id = get_role_from_request(request)
+        if not roles or not user_id:
+            return Response({'error': 'Authentification requise'}, status=401)
+        try:
+            user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            return Response({'error': 'Utilisateur introuvable'}, status=404)
+        instance = self.get_object()
+        if not self._can_write(user, instance):
+            return Response({'error': 'Acces non autorise'}, status=403)
+        return super().destroy(request, *args, **kwargs)
+
+
 class ModuleViewSet(viewsets.ModelViewSet):
     authentication_classes = []
     permission_classes = [AllowAny]
@@ -180,12 +269,12 @@ class ModuleViewSet(viewsets.ModelViewSet):
         if Role.HEAD_OF_DEPARTMENT in active_roles:
             hod = getattr(user, 'hod_profile', None)
             if hod and hod.department_id:
-                return Module.objects.filter(filiere__departement_id=hod.department_id)
+                return Module.objects.filter(semestre__filiere__departement_id=hod.department_id)
             return Module.objects.none()
         if Role.PROGRAM_MANAGER in active_roles:
             pm = getattr(user, 'program_manager_profile', None)
             if pm and pm.program_id:
-                return Module.objects.filter(filiere_id=pm.program_id)
+                return Module.objects.filter(semestre__filiere_id=pm.program_id)
             return Module.objects.none()
         return Module.objects.none()
 
@@ -197,15 +286,15 @@ class ModuleViewSet(viewsets.ModelViewSet):
             hod = getattr(user, 'hod_profile', None)
             if not hod or not hod.department_id:
                 return False
-            if module is not None and module.filiere:
-                return module.filiere.departement_id == hod.department_id
+            if module is not None and module.semestre:
+                return module.semestre.filiere.departement_id == hod.department_id
             return True
         if Role.PROGRAM_MANAGER in active_roles:
             pm = getattr(user, 'program_manager_profile', None)
             if not pm or not pm.program_id:
                 return False
             if module is not None:
-                return module.filiere_id == pm.program_id
+                return module.semestre.filiere_id == pm.program_id
             return True
         return False
 
@@ -2084,7 +2173,7 @@ def etudiants_par_module(request):
     if not roles or not user_id:
         return Response([], status=200)
 
-    modules = Module.objects.all()
+    modules = Module.objects.select_related('semestre__filiere').all()
     if has_role(roles, 'head_of_department'):
         try:
             user = User.objects.get(id=user_id)
@@ -2092,7 +2181,7 @@ def etudiants_par_module(request):
             return Response([], status=200)
         hod = getattr(user, 'hod_profile', None)
         if hod and hod.department_id:
-            modules = modules.filter(filiere__departement_id=hod.department_id)
+            modules = modules.filter(semestre__filiere__departement_id=hod.department_id)
         else:
             return Response([], status=200)
     elif has_role(roles, 'program_manager'):
@@ -2102,7 +2191,7 @@ def etudiants_par_module(request):
             return Response([], status=200)
         pm = getattr(user, 'program_manager_profile', None)
         if pm and pm.program_id:
-            modules = modules.filter(filiere_id=pm.program_id)
+            modules = modules.filter(semestre__filiere_id=pm.program_id)
         else:
             return Response([], status=200)
     elif not has_role(roles, 'admin'):
@@ -2116,11 +2205,12 @@ def etudiants_par_module(request):
             student_profile__modules=module,
         ).distinct().order_by('last_name', 'first_name')
 
-        filiere_name = module.filiere.nom_filiere if module.filiere else ''
+        filiere_name = module.semestre.filiere.nom_filiere if module.semestre and module.semestre.filiere else ''
 
         result.append({
             'module_id': module.id,
             'module': module.nom_module,
+            'semestre': module.semestre.nom_semestre,
             'filiere': filiere_name,
             'etudiants': StudentUserSerializer(students, many=True).data,
             'total': students.count(),

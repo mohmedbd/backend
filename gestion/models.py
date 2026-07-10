@@ -23,12 +23,29 @@ class Filiere(models.Model):
         return self.nom_filiere
 
 
-class Module(models.Model):
-    nom_module = models.CharField(max_length=100, unique=True)
+class Semestre(models.Model):
+    nom_semestre = models.CharField(max_length=100)
     filiere = models.ForeignKey(
         Filiere, on_delete=models.CASCADE,
-        null=True, blank=True, related_name='modules'
+        related_name='semestres'
     )
+
+    class Meta:
+        unique_together = ('nom_semestre', 'filiere')
+
+    def __str__(self):
+        return self.nom_semestre
+
+
+class Module(models.Model):
+    nom_module = models.CharField(max_length=100)
+    semestre = models.ForeignKey(
+        Semestre, on_delete=models.CASCADE,
+        related_name='modules'
+    )
+
+    class Meta:
+        unique_together = ('nom_module', 'semestre')
 
     def __str__(self):
         return self.nom_module

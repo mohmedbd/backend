@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Departement, Filiere, Module, Salle, Planification, SeanceQR, QRCode, Presence
+from .models import Departement, Filiere, Semestre, Module, Salle, Planification, SeanceQR, QRCode, Presence
 from users.models import User, StudentProfile
 
 
@@ -14,15 +14,25 @@ class FiliereSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Filiere
-        fields = ['id', 'nom_filiere', 'semester_filiere', 'departement', 'departement_name']
+        fields = ['id', 'nom_filiere', 'departement', 'departement_name']
+
+
+class SemestreSerializer(serializers.ModelSerializer):
+    filiere_name = serializers.CharField(source='filiere.nom_filiere', read_only=True)
+
+    class Meta:
+        model = Semestre
+        fields = ['id', 'nom_semestre', 'filiere', 'filiere_name']
 
 
 class ModuleSerializer(serializers.ModelSerializer):
-    filiere_name = serializers.CharField(source='filiere.nom_filiere', read_only=True, allow_null=True)
+    semestre_name = serializers.CharField(source='semestre.nom_semestre', read_only=True)
+    filiere = serializers.IntegerField(source='semestre.filiere_id', read_only=True)
+    filiere_name = serializers.CharField(source='semestre.filiere.nom_filiere', read_only=True)
 
     class Meta:
         model = Module
-        fields = ['id', 'nom_module', 'filiere', 'filiere_name']
+        fields = ['id', 'nom_module', 'semestre', 'semestre_name', 'filiere', 'filiere_name']
 
 
 class SalleSerializer(serializers.ModelSerializer):
