@@ -2164,6 +2164,108 @@ def importer_etudiants(request):
     })
 
 
+@api_view(['POST'])
+@authentication_classes([])
+@permission_classes([AllowAny])
+def importer_enseignants(request):
+    """Import teachers from an Excel file (.xlsx)."""
+    excel_file = request.FILES.get('file')
+    if not excel_file:
+        return Response({'error': 'Aucun fichier fourni'}, status=400)
+
+    if not excel_file.name.endswith(('.xlsx', '.xls')):
+        return Response({'error': 'Format de fichier invalide. Utilisez un fichier .xlsx'}, status=400)
+
+    try:
+        wb = openpyxl.load_workbook(excel_file, read_only=True)
+        ws = wb.active
+        rows = list(ws.iter_rows(values_only=True))
+    except Exception as e:
+        return Response({'error': f'Erreur de lecture du fichier: {str(e)}'}, status=400)
+
+    if len(rows) < 2:
+        return Response({'error': 'Le fichier est vide ou ne contient que l\'en-tête'}, status=400)
+
+    header = [str(cell).strip().lower() if cell else '' for cell in rows[0]]
+
+    col_map = {}
+    expected_cols = ['nom', 'prenom', 'email', 'password']
+    for col in expected_cols:
+        try:
+            col_map[col] = header.index(col)
+        except ValueError:
+            return Response({'error': f'Colonne "{col}" manquante dans le fichier'}, status=400)
+
+    try:
+        col_map['specialization'] = header.index('specialization')
+    except ValueError:
+        col_map['specialization'] = None
+
+    try:
+        col_map['department_ids'] = header.index('department_ids')
+    except ValueError:
+        col_map['department_ids'] = None
+
+    success_count = 0
+    errors = []
+    created_teachers = []
+
+    for i, row in enumerate(rows[1:], start=2):
+        try:
+            nom = str(row[col_map['nom']]).strip() if row[col_map['nom']] else ''
+            prenom = str(row[col_map['prenom']]).strip() if row[col_map['prenom']] else ''
+            email = str(row[col_map['email']]).strip().lower() if row[col_map['email']] else ''
+            password = str(row[col_map['password']]) if row[col_map['password']] else ''
+
+            if not nom or not prenom or not email or not password:
+                errors.append({'row': i, 'message': 'Champs obligatoires manquants'})
+                continue
+
+            if User.objects.filter(email=email).exists():
+                errors.append({'row': i, 'message': f'Email déjà utilisé: {email}'})
+                continue
+
+            specialization = ''
+            if col_map['specialization'] is not None and row[col_map['specialization']]:
+                specialization = str(row[col_map['specialization']]).strip()
+
+            department_ids = []
+            if col_map['department_ids'] is not None and row[col_map['department_ids']]:
+                raw = str(row[col_map['department_ids']]).strip()
+                for did in raw.split(','):
+                    did = did.strip()
+                    if did:
+                        try:
+                            department_ids.append(int(did))
+                        except ValueError:
+                            errors.append({'row': i, 'message': f'department_ids invalide: {did}'})
+                            continue
+
+            user = User.objects.create_user(
+                email=email, password=password,
+                first_name=prenom, last_name=nom,
+            )
+            from users.views import create_role_assignments, create_profile_for_role
+            extra_data = {'specialization': specialization}
+            if department_ids:
+                extra_data['department_ids'] = department_ids
+            create_role_assignments(user, [Role.PROFESSOR])
+            create_profile_for_role(user, Role.PROFESSOR, extra_data)
+
+            created_teachers.append(user)
+            success_count += 1
+
+        except Exception as e:
+            errors.append({'row': i, 'message': str(e)})
+
+    return Response({
+        'success': success_count,
+        'total': len(rows) - 1,
+        'errors': errors,
+        'teachers_created': ProfessorUserSerializer(created_teachers, many=True).data,
+    })
+
+
 @api_view(['GET'])
 @authentication_classes([])
 @permission_classes([AllowAny])
