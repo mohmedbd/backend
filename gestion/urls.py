@@ -12,7 +12,7 @@ from .views import (
     scanner_presence, update_profile_photo, my_profile,
     mes_planifications, mes_planifications_detail, emploi_du_temps_etudiant,
     importer_etudiants, importer_enseignants, etudiants_par_module,
-    absences
+    absences, export_absences_excel,
 )
 
 router = DefaultRouter()
@@ -48,5 +48,6 @@ urlpatterns = [
     path('enseignants/importer/', importer_enseignants, name='importer-enseignants'),
     path('etudiants/par-module/', etudiants_par_module, name='etudiants-par-module'),
     path('absences/', absences, name='absences'),
+    path('absences/export/', export_absences_excel, name='export-absences'),
     path('', include(router.urls)),
 ]

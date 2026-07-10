@@ -2537,5 +2537,204 @@ def absences(request):
 @api_view(['GET'])
 @authentication_classes([])
 @permission_classes([AllowAny])
+def export_absences_excel(request):
+    roles, user_id = get_role_from_request(request)
+    if not roles or not user_id:
+        return Response({'error': 'Authentification requise'}, status=401)
+
+    seances = SeanceQR.objects.select_related(
+        'planification__professor',
+        'planification__filiere',
+        'planification__semestre',
+        'planification__module_ref',
+        'planification__salle',
+    )
+
+    if has_role(roles, 'admin'):
+        pass
+    elif has_role(roles, 'head_of_department'):
+        try:
+            user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            return Response({'error': 'Utilisateur introuvable'}, status=404)
+        hod = getattr(user, 'hod_profile', None)
+        if not hod or not hod.department_id:
+            return Response({'error': 'Acces non autorise'}, status=403)
+        seances = seances.filter(planification__filiere__departement_id=hod.department_id)
+    elif has_role(roles, 'program_manager'):
+        try:
+            user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            return Response({'error': 'Utilisateur introuvable'}, status=404)
+        pm = getattr(user, 'program_manager_profile', None)
+        if not pm or not pm.program_id:
+            return Response({'error': 'Acces non autorise'}, status=403)
+        seances = seances.filter(planification__filiere_id=pm.program_id)
+    elif has_role(roles, 'professor'):
+        seances = seances.filter(planification__professor_id=user_id)
+    else:
+        return Response({'error': 'Acces non autorise'}, status=403)
+
+    filiere_id = request.GET.get('filiere')
+    semestre_id = request.GET.get('semestre')
+    module_id = request.GET.get('module')
+    professeur_id = request.GET.get('professor')
+    date_debut = request.GET.get('date_debut')
+    date_fin = request.GET.get('date_fin')
+
+    if filiere_id:
+        seances = seances.filter(planification__filiere_id=filiere_id)
+    if semestre_id:
+        seances = seances.filter(planification__semestre_id=semestre_id)
+    if module_id:
+        seances = seances.filter(planification__module_ref_id=module_id)
+    if professeur_id:
+        seances = seances.filter(planification__professor_id=professeur_id)
+    if date_debut:
+        seances = seances.filter(date__gte=date_debut)
+    if date_fin:
+        seances = seances.filter(date__lte=date_fin)
+
+    seances = seances.order_by('-date', 'planification__heure_debut')
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Rapport des présences"
+
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+
+    title_font   = Font(bold=True, size=14, color="FFFFFF")
+    title_fill   = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
+    sub_font     = Font(bold=True, size=11)
+    header_font  = Font(bold=True, size=11, color="FFFFFF")
+    header_fill  = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
+    fill_present = PatternFill(start_color="C6EFCE", end_color="C6EFCE", fill_type="solid")
+    fill_absent  = PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid")
+    fill_seance  = PatternFill(start_color="D9E2F3", end_color="D9E2F3", fill_type="solid")
+    thin_border  = Border(
+        left=Side(style='thin'), right=Side(style='thin'),
+        top=Side(style='thin'), bottom=Side(style='thin')
+    )
+    center_align = Alignment(horizontal='center', vertical='center')
+
+    ws.merge_cells('A1:P1')
+    c = ws['A1']
+    c.value = "RAPPORT DES PRESENCES"
+    c.font = title_font; c.fill = title_fill; c.alignment = center_align
+
+    headers = [
+        "Date", "Jour", "Horaire debut", "Horaire fin", "Module", "Salle",
+        "Filiere", "Semestre", "Professeur", "ID etudiant", "Prenom",
+        "Nom", "Email", "CIE", "Present", "Heure scan"
+    ]
+
+    row = 3
+    ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=16)
+    ws.cell(row=row, column=1, value="Filtres appliques:").font = sub_font
+    row += 1
+    filters_text = []
+    if filiere_id: filters_text.append(f"Filiere: {filiere_id}")
+    if semestre_id: filters_text.append(f"Semestre: {semestre_id}")
+    if module_id: filters_text.append(f"Module: {module_id}")
+    if professeur_id: filters_text.append(f"Professeur: {professeur_id}")
+    if date_debut: filters_text.append(f"Du: {date_debut}")
+    if date_fin: filters_text.append(f"Au: {date_fin}")
+    filters_str = ", ".join(filters_text) if filters_text else "Aucun"
+    ws.cell(row=row, column=1, value=filters_str)
+    row += 2
+
+    for col, h in enumerate(headers, start=1):
+        c = ws.cell(row=row, column=col, value=h)
+        c.font = header_font; c.fill = header_fill
+        c.alignment = center_align; c.border = thin_border
+    row += 1
+
+    total_seances = 0
+    total_presents = 0
+    total_absents = 0
+
+    for seance in seances:
+        plan = seance.planification
+        module_ref = plan.module_ref
+        if not module_ref:
+            continue
+
+        enrolled = User.objects.filter(
+            role_assignments__role__codename='student',
+            role_assignments__is_active=True,
+            student_profile__modules=module_ref,
+        ).select_related('student_profile').order_by('last_name', 'first_name')
+
+        present_qs = Presence.objects.filter(seance=seance)
+        present_ids = set(present_qs.values_list('student_id', flat=True))
+        present_map = {p.student_id: p for p in present_qs.select_related('student')}
+
+        date_val = str(seance.date)
+        try:
+            dt = seance.date
+            jours = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim']
+            jour_val = jours[dt.weekday()]
+        except Exception:
+            jour_val = ''
+        h_debut = str(plan.heure_debut)[:5]
+        h_fin = str(plan.heure_fin)[:5]
+        module_val = module_ref.nom_module
+        salle_val = plan.salle.nom_salle
+        filiere_val = plan.filiere.nom_filiere
+        semestre_val = plan.semestre.nom_semestre if plan.semestre else ''
+        professeur_val = f"{plan.professor.first_name} {plan.professor.last_name}"
+
+        for s in enrolled:
+            is_present = s.id in present_ids
+            if is_present:
+                total_presents += 1
+            else:
+                total_absents += 1
+
+            p = present_map.get(s.id)
+            heure_scan = str(p.heure_scan)[:5] if p and p.heure_scan else ''
+
+            values = [
+                date_val, jour_val, h_debut, h_fin, module_val, salle_val,
+                filiere_val, semestre_val, professeur_val, s.id,
+                s.first_name, s.last_name, s.email,
+                getattr(s.student_profile, 'CIE', '') if hasattr(s, 'student_profile') else '',
+                'Oui' if is_present else 'Non', heure_scan,
+            ]
+            for col, v in enumerate(values, start=1):
+                c = ws.cell(row=row, column=col, value=v)
+                c.border = thin_border
+                if col == 15:
+                    c.fill = fill_present if is_present else fill_absent
+                    c.alignment = center_align
+            row += 1
+
+        total_seances += 1
+
+    widths = [12, 6, 12, 12, 22, 10, 14, 10, 22, 12, 16, 16, 28, 14, 10, 12]
+    for i, w in enumerate(widths, start=1):
+        letter = chr(64 + i) if i <= 26 else chr(64 + (i - 1) // 26) + chr(65 + (i - 1) % 26)
+        ws.column_dimensions[letter].width = w
+
+    if total_seances == 0:
+        ws.cell(row=row, column=1, value="Aucune seance trouvee avec les filtres actuels.")
+
+    output = BytesIO()
+    wb.save(output)
+    output.seek(0)
+
+    from datetime import date
+    filename = f"rapport_presences_{date.today().isoformat()}.xlsx"
+    response = HttpResponse(
+        output.read(),
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    return response
+
+
+@api_view(['GET'])
+@authentication_classes([])
+@permission_classes([AllowAny])
 def home(request):
     return HttpResponse("Render works!")
