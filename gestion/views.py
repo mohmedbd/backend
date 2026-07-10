@@ -698,8 +698,14 @@ class StudentListViewSet(viewsets.ModelViewSet):
         user, roles = self._get_user_and_roles(request)
         if not user:
             return Response({'error': 'Authentification requise'}, status=401)
+        debug_info = {
+            'token_roles': roles,
+            'db_roles': user.get_active_roles() if user else [],
+            'user_email': getattr(user, 'email', None) if user else None,
+            'user_id': user.id if user else None,
+        }
         if not self._can_access_student(user, roles):
-            return Response({'error': 'Acces non autorise'}, status=403)
+            return Response({'error': 'Acces non autorise', 'debug': debug_info}, status=403)
         filiere_id = request.data.get('program_id') or request.data.get('filiere_id')
         if has_role(roles, 'program_manager'):
             pm = getattr(user, 'program_manager_profile', None)
