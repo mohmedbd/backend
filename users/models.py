@@ -270,6 +270,11 @@ class StudentProfile(models.Model):
         null=True,
         blank=True,
     )
+    modules = models.ManyToManyField(
+        'gestion.Module',
+        blank=True,
+        related_name='students',
+    )
     enrollment_date = models.DateField(auto_now_add=True)
     can_scan_presence = models.BooleanField(default=True)
     can_view_own_schedule = models.BooleanField(default=True)

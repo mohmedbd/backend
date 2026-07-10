@@ -2,7 +2,7 @@ from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .views import generer_seance_qr, get_qrcode_seance, planifications_du_jour
 from .views import (
-    FiliereViewSet, DepartementViewSet, SalleViewSet, AdminListViewSet,
+    FiliereViewSet, ModuleViewSet, DepartementViewSet, SalleViewSet, AdminListViewSet,
     StudentListViewSet, ProfessorListViewSet, HeadOfDepartmentListViewSet,
     ProgramManagerListViewSet, PlanificationViewSet,
     SeanceQRViewSet, QRCodeViewSet, PresenceViewSet
@@ -15,6 +15,7 @@ from .views import (
 )
 
 router = DefaultRouter()
+router.register(r'modules', ModuleViewSet)
 router.register(r'departements', DepartementViewSet)
 router.register(r'filieres', FiliereViewSet)
 router.register(r'salles', SalleViewSet)

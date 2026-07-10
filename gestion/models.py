@@ -23,6 +23,17 @@ class Filiere(models.Model):
         return self.nom_filiere
 
 
+class Module(models.Model):
+    nom_module = models.CharField(max_length=100, unique=True)
+    filiere = models.ForeignKey(
+        Filiere, on_delete=models.CASCADE,
+        null=True, blank=True, related_name='modules'
+    )
+
+    def __str__(self):
+        return self.nom_module
+
+
 class Salle(models.Model):
     type_salle = models.CharField(max_length=30)
     nom_salle  = models.CharField(max_length=30)

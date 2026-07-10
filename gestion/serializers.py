@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Departement, Filiere, Salle, Planification, SeanceQR, QRCode, Presence
+from .models import Departement, Filiere, Module, Salle, Planification, SeanceQR, QRCode, Presence
 from users.models import User, StudentProfile
 
 
@@ -15,6 +15,14 @@ class FiliereSerializer(serializers.ModelSerializer):
     class Meta:
         model = Filiere
         fields = ['id', 'nom_filiere', 'semester_filiere', 'departement', 'departement_name']
+
+
+class ModuleSerializer(serializers.ModelSerializer):
+    filiere_name = serializers.CharField(source='filiere.nom_filiere', read_only=True, allow_null=True)
+
+    class Meta:
+        model = Module
+        fields = ['id', 'nom_module', 'filiere', 'filiere_name']
 
 
 class SalleSerializer(serializers.ModelSerializer):
@@ -50,10 +58,25 @@ class PresenceSerializer(serializers.ModelSerializer):
 class StudentUserSerializer(serializers.ModelSerializer):
     CIE = serializers.CharField(source='student_profile.CIE', read_only=True)
     filiere = serializers.CharField(source='student_profile.program.nom_filiere', read_only=True, allow_null=True)
+    filiere_id = serializers.IntegerField(source='student_profile.program_id', read_only=True, allow_null=True)
+    module_ids = serializers.SerializerMethodField()
+    modules = serializers.SerializerMethodField()
 
     class Meta:
         model = User
-        fields = ['id', 'email', 'first_name', 'last_name', 'photo_url', 'CIE', 'filiere']
+        fields = ['id', 'email', 'first_name', 'last_name', 'photo_url', 'CIE', 'filiere', 'filiere_id', 'module_ids', 'modules']
+
+    def get_module_ids(self, obj):
+        profile = getattr(obj, 'student_profile', None)
+        if profile:
+            return list(profile.modules.values_list('id', flat=True))
+        return []
+
+    def get_modules(self, obj):
+        profile = getattr(obj, 'student_profile', None)
+        if profile:
+            return list(profile.modules.values_list('nom_module', flat=True))
+        return []
 
 
 class ProfessorUserSerializer(serializers.ModelSerializer):
