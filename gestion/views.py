@@ -1142,6 +1142,8 @@ class PlanificationViewSet(viewsets.ModelViewSet):
                     filiere_id=pm.program_id
                 )
             return Planification.objects.none()
+        if has_role(roles, 'professor'):
+            return Planification.objects.filter(professor_id=user_id)
         return Planification.objects.none()
 
     def _can_manage(self, roles, user_id, planification=None):
@@ -1190,7 +1192,7 @@ class PlanificationViewSet(viewsets.ModelViewSet):
         filiere_id = request.data.get('filiere')
         if not filiere_id:
             return Response({'error': 'Filiere requise'}, status=400)
-        if has_role(roles, 'head_of_department'):
+        if has_role(roles, 'head_of_department') and not has_role(roles, 'admin'):
             try:
                 user = User.objects.get(id=user_id)
             except User.DoesNotExist:
@@ -1200,7 +1202,7 @@ class PlanificationViewSet(viewsets.ModelViewSet):
                 return Response({'error': 'Acces non autorise'}, status=403)
             if not Filiere.objects.filter(id=filiere_id, departement_id=hod.department_id).exists():
                 return Response({'error': 'Filiere hors de votre departement'}, status=403)
-        if has_role(roles, 'program_manager'):
+        if has_role(roles, 'program_manager') and not has_role(roles, 'admin'):
             try:
                 user = User.objects.get(id=user_id)
             except User.DoesNotExist:
