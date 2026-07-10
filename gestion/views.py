@@ -2408,32 +2408,29 @@ def etudiants_par_module(request):
 def export_etudiants_par_module_excel(request):
     try:
         roles, user_id = get_role_from_request(request)
-        if not roles or not user_id:
-            return Response({'error': 'Authentification requise'}, status=401)
-
         modules = Module.objects.select_related('semestre__filiere').all()
         if has_role(roles, 'head_of_department'):
             try:
                 user = User.objects.get(id=user_id)
             except User.DoesNotExist:
-                return Response({'error': 'Acces non autorise'}, status=403)
+                modules = modules.none()
             hod = getattr(user, 'hod_profile', None)
             if hod and hod.department_id:
                 modules = modules.filter(semestre__filiere__departement_id=hod.department_id)
             else:
-                return Response({'error': 'Acces non autorise'}, status=403)
+                modules = modules.none()
         elif has_role(roles, 'program_manager'):
             try:
                 user = User.objects.get(id=user_id)
             except User.DoesNotExist:
-                return Response({'error': 'Acces non autorise'}, status=403)
+                modules = modules.none()
             pm = getattr(user, 'program_manager_profile', None)
             if pm and pm.program_id:
                 modules = modules.filter(semestre__filiere_id=pm.program_id)
             else:
-                return Response({'error': 'Acces non autorise'}, status=403)
+                modules = modules.none()
         elif not has_role(roles, 'admin'):
-            return Response({'error': 'Acces non autorise'}, status=403)
+            modules = modules.none()
 
         wb = openpyxl.Workbook()
         ws = wb.active
