@@ -2830,5 +2830,215 @@ def export_absences_excel(request):
 @api_view(['GET'])
 @authentication_classes([])
 @permission_classes([AllowAny])
+def export_etudiants_excel(request):
+    try:
+        roles, user_id = get_role_from_request(request)
+        qs = User.objects.filter(
+            role_assignments__role__codename='student',
+            role_assignments__is_active=True
+        )
+        if has_role(roles, 'admin'):
+            pass
+        elif has_role(roles, 'head_of_department'):
+            try:
+                user = User.objects.get(id=user_id)
+            except User.DoesNotExist:
+                qs = qs.none()
+            hod = getattr(user, 'hod_profile', None)
+            if hod and hod.department_id:
+                qs = qs.filter(student_profile__program__departement_id=hod.department_id)
+            else:
+                qs = qs.none()
+        elif has_role(roles, 'program_manager'):
+            try:
+                user = User.objects.get(id=user_id)
+            except User.DoesNotExist:
+                qs = qs.none()
+            pm = getattr(user, 'program_manager_profile', None)
+            if pm and pm.program_id:
+                qs = qs.filter(student_profile__program_id=pm.program_id)
+            else:
+                qs = qs.none()
+        elif has_role(roles, 'professor'):
+            try:
+                user = User.objects.get(id=user_id)
+            except User.DoesNotExist:
+                qs = qs.none()
+            prof = getattr(user, 'professor_profile', None)
+            if prof:
+                dept_ids = prof.departements.values_list('id', flat=True)
+                qs = qs.filter(student_profile__program__departement_id__in=dept_ids)
+            else:
+                qs = qs.none()
+        else:
+            qs = qs.none()
+
+        qs = qs.order_by('last_name', 'first_name')
+
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Etudiants"
+
+        from openpyxl.styles import Font, PatternFill, Alignment
+
+        title_font  = Font(bold=True, size=14, color="FFFFFF")
+        title_fill  = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
+        header_font = Font(bold=True, size=11, color="FFFFFF")
+        header_fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
+        center      = Alignment(horizontal='center', vertical='center')
+
+        ws.merge_cells('A1:G1')
+        c = ws['A1']
+        c.value = "LISTE DES ETUDIANTS"
+        c.font = title_font; c.fill = title_fill; c.alignment = center
+
+        headers = ["ID", "Prenom", "Nom", "Email", "CIE", "Filiere", "Modules"]
+        header_row = 3
+        for col, h in enumerate(headers, start=1):
+            cell = ws.cell(row=header_row, column=col, value=h)
+            cell.font = header_font; cell.fill = header_fill
+            cell.alignment = center
+
+        row = header_row + 1
+        for s in qs:
+            sp = getattr(s, 'student_profile', None)
+            cie = sp.CIE if sp and sp.CIE else ''
+            filiere = sp.program.nom_filiere if sp and sp.program else ''
+            if sp:
+                modules = sp.modules.all()
+                module_str = ', '.join(m.nom_module for m in modules)
+            else:
+                module_str = ''
+            values = [s.id, s.first_name, s.last_name, s.email, cie, filiere, module_str]
+            for col, v in enumerate(values, start=1):
+                ws.cell(row=row, column=col, value=v)
+            row += 1
+
+        for col_letter, w in {'A': 8, 'B': 18, 'C': 18, 'D': 30, 'E': 16, 'F': 20, 'G': 40}.items():
+            ws.column_dimensions[col_letter].width = w
+
+        if row == header_row + 1:
+            ws.cell(row=row, column=1, value="Aucun etudiant trouve.")
+
+        output = BytesIO()
+        wb.save(output)
+        output.seek(0)
+
+        from datetime import date
+        filename = f"etudiants_{date.today().isoformat()}.xlsx"
+        response = HttpResponse(
+            output.read(),
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        return response
+    except Exception as e:
+        return Response({'error': str(e)}, status=500)
+
+
+@api_view(['GET'])
+@authentication_classes([])
+@permission_classes([AllowAny])
+def export_modules_excel(request):
+    try:
+        roles, user_id = get_role_from_request(request)
+        qs = Module.objects.select_related('semestre__filiere').all()
+
+        if has_role(roles, 'admin'):
+            pass
+        elif has_role(roles, 'head_of_department'):
+            try:
+                user = User.objects.get(id=user_id)
+            except User.DoesNotExist:
+                qs = qs.none()
+            hod = getattr(user, 'hod_profile', None)
+            if hod and hod.department_id:
+                qs = qs.filter(semestre__filiere__departement_id=hod.department_id)
+            else:
+                qs = qs.none()
+        elif has_role(roles, 'program_manager'):
+            try:
+                user = User.objects.get(id=user_id)
+            except User.DoesNotExist:
+                qs = qs.none()
+            pm = getattr(user, 'program_manager_profile', None)
+            if pm and pm.program_id:
+                qs = qs.filter(semestre__filiere_id=pm.program_id)
+            else:
+                qs = qs.none()
+        elif has_role(roles, 'professor'):
+            try:
+                user = User.objects.get(id=user_id)
+            except User.DoesNotExist:
+                qs = qs.none()
+            prof = getattr(user, 'professor_profile', None)
+            if prof:
+                dept_ids = prof.departements.values_list('id', flat=True)
+                qs = qs.filter(semestre__filiere__departement_id__in=dept_ids)
+            else:
+                qs = qs.none()
+        else:
+            qs = qs.none()
+
+        qs = qs.order_by('nom_module')
+
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Modules"
+
+        from openpyxl.styles import Font, PatternFill, Alignment
+
+        title_font  = Font(bold=True, size=14, color="FFFFFF")
+        title_fill  = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
+        header_font = Font(bold=True, size=11, color="FFFFFF")
+        header_fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
+        center      = Alignment(horizontal='center', vertical='center')
+
+        ws.merge_cells('A1:D1')
+        c = ws['A1']
+        c.value = "LISTE DES MODULES"
+        c.font = title_font; c.fill = title_fill; c.alignment = center
+
+        headers = ["ID", "Nom du module", "Semestre", "Filiere"]
+        header_row = 3
+        for col, h in enumerate(headers, start=1):
+            cell = ws.cell(row=header_row, column=col, value=h)
+            cell.font = header_font; cell.fill = header_fill
+            cell.alignment = center
+
+        row = header_row + 1
+        for m in qs:
+            filiere_name = m.semestre.filiere.nom_filiere if m.semestre and m.semestre.filiere else ''
+            semestre_name = m.semestre.nom_semestre if m.semestre else ''
+            values = [m.id, m.nom_module, semestre_name, filiere_name]
+            for col, v in enumerate(values, start=1):
+                ws.cell(row=row, column=col, value=v)
+            row += 1
+
+        for col_letter, w in {'A': 8, 'B': 30, 'C': 16, 'D': 20}.items():
+            ws.column_dimensions[col_letter].width = w
+
+        if row == header_row + 1:
+            ws.cell(row=row, column=1, value="Aucun module trouve.")
+
+        output = BytesIO()
+        wb.save(output)
+        output.seek(0)
+
+        from datetime import date
+        filename = f"modules_{date.today().isoformat()}.xlsx"
+        response = HttpResponse(
+            output.read(),
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        return response
+    except Exception as e:
+        return Response({'error': str(e)}, status=500)
+
+
+@api_view(['GET'])
+@authentication_classes([])
+@permission_classes([AllowAny])
 def home(request):
     return HttpResponse("Render works!")
