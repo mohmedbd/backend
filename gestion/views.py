@@ -180,18 +180,24 @@ class SemestreViewSet(viewsets.ModelViewSet):
         except User.DoesNotExist:
             return Semestre.objects.none()
 
+        qs = Semestre.objects.all()
+
+        filiere = self.request.GET.get('filiere')
+        if filiere:
+            qs = qs.filter(filiere_id=filiere)
+
         active_roles = user.get_active_roles()
         if Role.ADMIN in active_roles:
-            return Semestre.objects.all()
+            return qs
         if Role.HEAD_OF_DEPARTMENT in active_roles:
             hod = getattr(user, 'hod_profile', None)
             if hod and hod.department_id:
-                return Semestre.objects.filter(filiere__departement_id=hod.department_id)
+                return qs.filter(filiere__departement_id=hod.department_id)
             return Semestre.objects.none()
         if Role.PROGRAM_MANAGER in active_roles:
             pm = getattr(user, 'program_manager_profile', None)
             if pm and pm.program_id:
-                return Semestre.objects.filter(filiere_id=pm.program_id)
+                return qs.filter(filiere_id=pm.program_id)
             return Semestre.objects.none()
         return Semestre.objects.none()
 
@@ -269,18 +275,24 @@ class ModuleViewSet(viewsets.ModelViewSet):
         except User.DoesNotExist:
             return Module.objects.none()
 
+        qs = Module.objects.all()
+
+        semestre = self.request.GET.get('semestre')
+        if semestre:
+            qs = qs.filter(semestre_id=semestre)
+
         active_roles = user.get_active_roles()
         if Role.ADMIN in active_roles:
-            return Module.objects.all()
+            return qs
         if Role.HEAD_OF_DEPARTMENT in active_roles:
             hod = getattr(user, 'hod_profile', None)
             if hod and hod.department_id:
-                return Module.objects.filter(semestre__filiere__departement_id=hod.department_id)
+                return qs.filter(semestre__filiere__departement_id=hod.department_id)
             return Module.objects.none()
         if Role.PROGRAM_MANAGER in active_roles:
             pm = getattr(user, 'program_manager_profile', None)
             if pm and pm.program_id:
-                return Module.objects.filter(semestre__filiere_id=pm.program_id)
+                return qs.filter(semestre__filiere_id=pm.program_id)
             return Module.objects.none()
         return Module.objects.none()
 
