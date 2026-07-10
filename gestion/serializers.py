@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Departement, Filiere, Semestre, Module, Salle, Planification, SeanceQR, QRCode, Presence
+from .models import Departement, Filiere, Semestre, Module, Salle, Planification, SeanceQR, QRCode, Presence, AuditLog
 from users.models import User, StudentProfile
 
 
@@ -125,3 +125,16 @@ class ProgramManagerUserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ['id', 'email', 'first_name', 'last_name', 'photo_url', 'program_id', 'program_name']
+
+
+class AuditLogSerializer(serializers.ModelSerializer):
+    user_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = AuditLog
+        fields = ['id', 'user', 'user_name', 'action_type', 'description', 'timestamp', 'related_object_type', 'related_object_id']
+
+    def get_user_name(self, obj):
+        if obj.user:
+            return f"{obj.user.first_name} {obj.user.last_name}" if obj.user.first_name or obj.user.last_name else obj.user.email
+        return "Système"

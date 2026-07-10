@@ -121,6 +121,41 @@ class QRCode(models.Model):
         return f"QR - Séance {self.seance}"
 
 
+class AuditLog(models.Model):
+    ACTION_CHOICES = [
+        ('CREATE_STUDENT', 'Ajout étudiant'),
+        ('UPDATE_STUDENT', 'Modification étudiant'),
+        ('DELETE_STUDENT', 'Suppression étudiant'),
+        ('CREATE_TEACHER', 'Ajout enseignant'),
+        ('UPDATE_TEACHER', 'Modification enseignant'),
+        ('DELETE_TEACHER', 'Suppression enseignant'),
+        ('CREATE_SEANCE', 'Création séance'),
+        ('RECORD_PRESENCE', 'Enregistrement présence'),
+        ('IMPORT_STUDENTS', 'Importation étudiants'),
+        ('IMPORT_TEACHERS', 'Importation enseignants'),
+        ('EXPORT', 'Exportation fichier'),
+        ('OTHER', 'Autre'),
+    ]
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='audit_logs',
+    )
+    action_type = models.CharField(max_length=30, choices=ACTION_CHOICES)
+    description = models.TextField()
+    timestamp = models.DateTimeField(auto_now_add=True, db_index=True)
+    related_object_type = models.CharField(max_length=50, null=True, blank=True)
+    related_object_id = models.IntegerField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-timestamp']
+
+    def __str__(self):
+        return f"[{self.timestamp:%Y-%m-%d %H:%M}] {self.action_type} - {self.user}"
+
+
 class Presence(models.Model):
     student    = models.ForeignKey(
         settings.AUTH_USER_MODEL,

@@ -6,16 +6,18 @@ from rest_framework.decorators import api_view, permission_classes, authenticati
 from rest_framework.response import Response
 from rest_framework import status
 from django.utils import timezone
+from django.db.models import Q
 from datetime import timedelta
 from rest_framework_simplejwt.tokens import AccessToken as AT
 
-from .models import Departement, Filiere, Semestre, Module, Salle, Planification, SeanceQR, QRCode, Presence
+from .models import Departement, Filiere, Semestre, Module, Salle, Planification, SeanceQR, QRCode, Presence, AuditLog
 from .serializers import (
     DepartementSerializer, FiliereSerializer, SemestreSerializer, ModuleSerializer, SalleSerializer,
     PlanificationSerializer, SeanceQRSerializer,
     QRCodeSerializer, PresenceSerializer,
     StudentUserSerializer, ProfessorUserSerializer,
     HeadOfDepartmentUserSerializer, ProgramManagerUserSerializer,
+    AuditLogSerializer,
 )
 from users.models import (
     User, RoleConfig, UserRoleAssignment, Role,
@@ -49,6 +51,24 @@ def has_role(roles, required_role):
     if not roles:
         return False
     return required_role in roles
+
+
+def log_audit(request, action_type, description, related_object_type=None, related_object_id=None):
+    from .models import AuditLog
+    roles, user_id = get_role_from_request(request)
+    user = None
+    if user_id:
+        try:
+            user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            pass
+    AuditLog.objects.create(
+        user=user,
+        action_type=action_type,
+        description=description,
+        related_object_type=related_object_type,
+        related_object_id=related_object_id,
+    )
 
 
 class FiliereViewSet(viewsets.ModelViewSet):
@@ -704,7 +724,10 @@ class StudentListViewSet(viewsets.ModelViewSet):
         instance = self.get_object()
         if not self._can_access_student(request, instance):
             return Response({'error': 'Acces non autorise a cet etudiant'}, status=403)
-        return super().destroy(request, *args, **kwargs)
+        info = f"{instance.first_name} {instance.last_name} ({instance.email})"
+        result = super().destroy(request, *args, **kwargs)
+        log_audit(request, 'DELETE_STUDENT', f"Suppression étudiant: {info}", 'User', instance.id)
+        return result
 
     def _create_user(self, request, role):
         email = request.data.get('email')
@@ -739,6 +762,7 @@ class StudentListViewSet(viewsets.ModelViewSet):
                 profile.modules.set(module_ids)
 
         serializer = self.get_serializer(user)
+        log_audit(request, 'CREATE_STUDENT', f"Ajout étudiant: {prenom} {nom} ({email})", 'User', user.id)
         return Response(serializer.data, status=201)
 
     def _update_user(self, request, *args, **kwargs):
@@ -749,6 +773,7 @@ class StudentListViewSet(viewsets.ModelViewSet):
         prenom = request.data.get('first_name', instance.first_name)
         password = request.data.get('password')
 
+        old_email = instance.email
         instance.email = email
         instance.last_name = nom
         instance.first_name = prenom
@@ -770,6 +795,7 @@ class StudentListViewSet(viewsets.ModelViewSet):
                 profile.modules.set(module_ids)
 
         serializer = self.get_serializer(instance)
+        log_audit(request, 'UPDATE_STUDENT', f"Modification étudiant: {prenom} {nom} ({old_email})", 'User', instance.id)
         return Response(serializer.data)
 
 
@@ -871,7 +897,10 @@ class ProfessorListViewSet(viewsets.ModelViewSet):
         instance = self.get_object()
         if not self._can_manage_professor(user, hod_dept_id, instance):
             return Response({'error': 'Acces non autorise a cet enseignant'}, status=403)
-        return super().destroy(request, *args, **kwargs)
+        info = f"{instance.first_name} {instance.last_name} ({instance.email})"
+        result = super().destroy(request, *args, **kwargs)
+        log_audit(request, 'DELETE_TEACHER', f"Suppression enseignant: {info}", 'User', instance.id)
+        return result
 
     def _create_user(self, request, role, hod_dept_id=None):
         email = request.data.get('email')
@@ -904,6 +933,7 @@ class ProfessorListViewSet(viewsets.ModelViewSet):
         create_profile_for_role(user, role, extra_data)
 
         serializer = self.get_serializer(user)
+        log_audit(request, 'CREATE_TEACHER', f"Ajout enseignant: {prenom} {nom} ({email})", 'User', user.id)
         return Response(serializer.data, status=201)
 
     def _update_user(self, request, *args, **kwargs):
@@ -914,6 +944,7 @@ class ProfessorListViewSet(viewsets.ModelViewSet):
         prenom = request.data.get('first_name', instance.first_name)
         password = request.data.get('password')
 
+        old_email = instance.email
         instance.email = email
         instance.last_name = nom
         instance.first_name = prenom
@@ -928,6 +959,7 @@ class ProfessorListViewSet(viewsets.ModelViewSet):
                 profile.departements.set(department_ids)
 
         serializer = self.get_serializer(instance)
+        log_audit(request, 'UPDATE_TEACHER', f"Modification enseignant: {prenom} {nom} ({old_email})", 'User', instance.id)
         return Response(serializer.data)
 
 
@@ -1457,6 +1489,8 @@ def generer_seance_qr(request):
 
     expire_dans = int((qrcode.cree_a + timedelta(minutes=qrcode.expiration) - timezone.now()).total_seconds())
 
+    log_audit(request, 'CREATE_SEANCE', f"Création séance #{seance.id} - {planification.module} ({planification.jour})", 'SeanceQR', seance.id)
+
     return Response({
         'seance_id': seance.id,
         'token': str(qrcode.token),
@@ -1820,6 +1854,7 @@ def export_seance_excel(request, seance_id):
         content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     )
     response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    log_audit(request, 'EXPORT', f"Export séance #{seance_id} - {filename}", 'SeanceQR', seance_id)
     return response
 
 
@@ -1882,13 +1917,18 @@ def scanner_presence(request):
     now_utc = timezone.now()
     now_local = timezone.localtime(now_utc)
 
-    Presence.objects.create(
+    presence = Presence.objects.create(
         student=student_profile.user,
         seance=seance,
         date_scan=now_local.date(),
         heure_scan=now_local.time(),
         ip_address=ip,
     )
+
+    log_audit(request, 'RECORD_PRESENCE',
+        f"Présence enregistrée - {student_profile.user.first_name} {student_profile.user.last_name} "
+        f"(CIE: {cie}) pour séance #{seance.id}",
+        'Presence', presence.id)
 
     return Response({
         'status': 'success',
@@ -2237,6 +2277,10 @@ def importer_etudiants(request):
         except Exception as e:
             errors.append({'row': i, 'message': str(e)})
 
+    log_audit(request, 'IMPORT_STUDENTS',
+        f"Importation étudiants: {success_count}/{len(rows) - 1} réussis, {len(errors)} erreurs",
+        None, None)
+
     return Response({
         'success': success_count,
         'total': len(rows) - 1,
@@ -2338,6 +2382,10 @@ def importer_enseignants(request):
 
         except Exception as e:
             errors.append({'row': i, 'message': str(e)})
+
+    log_audit(request, 'IMPORT_TEACHERS',
+        f"Importation enseignants: {success_count}/{len(rows) - 1} réussis, {len(errors)} erreurs",
+        None, None)
 
     return Response({
         'success': success_count,
@@ -2491,6 +2539,7 @@ def export_etudiants_par_module_excel(request):
             content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         )
         response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        log_audit(request, 'EXPORT', f"Export étudiants par module - {filename}", None, None)
         return response
     except Exception as e:
         return Response({'error': str(e)}, status=500)
@@ -2824,6 +2873,7 @@ def export_absences_excel(request):
         content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     )
     response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    log_audit(request, 'EXPORT', f"Export rapport présences/absences - {filename}", None, None)
     return response
 
 
@@ -2931,6 +2981,7 @@ def export_etudiants_excel(request):
             content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         )
         response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        log_audit(request, 'EXPORT', f"Export liste étudiants - {filename}", None, None)
         return response
     except Exception as e:
         return Response({'error': str(e)}, status=500)
@@ -3032,9 +3083,61 @@ def export_modules_excel(request):
             content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         )
         response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        log_audit(request, 'EXPORT', f"Export liste modules - {filename}", None, None)
         return response
     except Exception as e:
         return Response({'error': str(e)}, status=500)
+
+
+@api_view(['GET'])
+@authentication_classes([])
+@permission_classes([AllowAny])
+def audit_logs(request):
+    roles, user_id = get_role_from_request(request)
+    if not has_role(roles, 'admin'):
+        return Response({'error': 'Acces reserve aux administrateurs'}, status=403)
+
+    qs = AuditLog.objects.select_related('user').all()
+
+    action_type = request.GET.get('action_type')
+    if action_type:
+        qs = qs.filter(action_type=action_type)
+
+    user_id_filter = request.GET.get('user_id')
+    if user_id_filter:
+        qs = qs.filter(user_id=user_id_filter)
+
+    search = request.GET.get('search')
+    if search:
+        qs = qs.filter(
+            Q(description__icontains=search) |
+            Q(user__email__icontains=search) |
+            Q(user__first_name__icontains=search) |
+            Q(user__last_name__icontains=search)
+        )
+
+    date_from = request.GET.get('date_from')
+    if date_from:
+        qs = qs.filter(timestamp__gte=date_from)
+
+    date_to = request.GET.get('date_to')
+    if date_to:
+        qs = qs.filter(timestamp__lte=date_to + 'T23:59:59')
+
+    page = int(request.GET.get('page', 1))
+    page_size = int(request.GET.get('page_size', 50))
+    total = qs.count()
+    start = (page - 1) * page_size
+    end = start + page_size
+    qs = qs[start:end]
+
+    serializer = AuditLogSerializer(qs, many=True)
+    return Response({
+        'total': total,
+        'page': page,
+        'page_size': page_size,
+        'results': serializer.data,
+    })
 
 
 @api_view(['GET'])

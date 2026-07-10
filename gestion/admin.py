@@ -7,6 +7,7 @@ from .models import (
     SeanceQR,
     QRCode,
     Presence,
+    AuditLog,
 )
 from users.models import (
     AdminProfile, ProfessorProfile, HeadOfDepartmentProfile,
@@ -55,5 +56,13 @@ class PresenceAdmin(admin.ModelAdmin):
     list_display = ['student', 'seance', 'date_scan', 'heure_scan', 'ip_address']
     list_filter = ['date_scan']
     search_fields = ['student__email', 'student__last_name']
+
+
+@admin.register(AuditLog)
+class AuditLogAdmin(admin.ModelAdmin):
+    list_display = ['timestamp', 'action_type', 'user', 'description']
+    list_filter = ['action_type', 'timestamp']
+    search_fields = ['description', 'user__email', 'user__last_name']
+    readonly_fields = ['user', 'action_type', 'description', 'timestamp', 'related_object_type', 'related_object_id']
 
 
