@@ -1688,6 +1688,7 @@ def liste_presences_seance(request, seance_id):
 
 
 import openpyxl
+from io import BytesIO
 
 @api_view(['GET'])
 @authentication_classes([])
@@ -1753,63 +1754,72 @@ def export_seance_excel(request, seance_id):
     ws = wb.active
     ws.title = f"Seance {seance_id}"
 
-    from openpyxl.styles import Font, PatternFill, Alignment
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 
-    style_titre  = Font(bold=True, size=12)
+    title_font   = Font(bold=True, size=14, color="FFFFFF")
+    title_fill   = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
+    info_font    = Font(bold=True, size=11)
+    header_font  = Font(bold=True, size=11, color="FFFFFF")
+    header_fill  = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
     fill_present = PatternFill(start_color="C6EFCE", end_color="C6EFCE", fill_type="solid")
     fill_absent  = PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid")
-    fill_header  = PatternFill(start_color="BDD7EE", end_color="BDD7EE", fill_type="solid")
-    bold         = Font(bold=True)
+    thin_border  = Border(
+        left=Side(style='thin'), right=Side(style='thin'),
+        top=Side(style='thin'), bottom=Side(style='thin')
+    )
+    center_align = Alignment(horizontal='center', vertical='center')
 
-    ws.append(['Filiere',   filiere.nom_filiere])
-    ws.append(['Module',    seance.planification.module])
-    ws.append(['Salle',     str(seance.planification.salle)])
-    ws.append(['Date',      str(seance.date)])
-    ws.append(['Semestre',  filiere.semester_filiere])
-    ws.append([])
+    ws.merge_cells('A1:F1')
+    c = ws['A1']
+    c.value = f"FEUILLE DE PRESENCE - {filiere.nom_filiere}"
+    c.font = title_font; c.fill = title_fill; c.alignment = center_align
 
-    for row in ws.iter_rows(min_row=1, max_row=4):
-        row[0].font = style_titre
+    info_data = [
+        ('Filiere',  filiere.nom_filiere),
+        ('Module',   seance.planification.module),
+        ('Salle',    str(seance.planification.salle)),
+        ('Date',     str(seance.date)),
+        ('Semestre', filiere.semester_filiere),
+    ]
+    for i, (label, value) in enumerate(info_data, start=2):
+        ws.cell(row=i, column=1, value=label).font = info_font
+        ws.cell(row=i, column=2, value=value)
 
-    header_row = ["N", "Nom", "Prenom", "CIE", "Filiere", "Presence"]
-    ws.append(header_row)
-
-    header_excel_row = ws.max_row
-    for cell in ws[header_excel_row]:
-        cell.font      = bold
-        cell.fill      = fill_header
-        cell.alignment = Alignment(horizontal='center')
+    header_row_num = len(info_data) + 2
+    headers = ["N", "Nom", "Prenom", "CIE", "Filiere", "Presence"]
+    for col, h in enumerate(headers, start=1):
+        c = ws.cell(row=header_row_num, column=col, value=h)
+        c.font = header_font; c.fill = header_fill
+        c.alignment = center_align; c.border = thin_border
 
     for i, sp in enumerate(student_profiles, start=1):
         est_present = sp.user.id in presents_ids
-        statut      = 'Present' if est_present else 'Absent'
+        row_num = header_row_num + i
+        values = [i, sp.user.last_name, sp.user.first_name, sp.CIE, str(sp.program), 'Present' if est_present else 'Absent']
+        for col, v in enumerate(values, start=1):
+            c = ws.cell(row=row_num, column=col, value=v)
+            c.border = thin_border
+            if col == 6:
+                c.fill = fill_present if est_present else fill_absent
+                c.alignment = center_align
 
-        ws.append([
-            i,
-            sp.user.last_name,
-            sp.user.first_name,
-            sp.CIE,
-            str(sp.program),
-            statut,
-        ])
+    ws.column_dimensions['A'].width = 6
+    ws.column_dimensions['B'].width = 22
+    ws.column_dimensions['C'].width = 22
+    ws.column_dimensions['D'].width = 18
+    ws.column_dimensions['E'].width = 14
+    ws.column_dimensions['F'].width = 12
 
-        statut_cell      = ws.cell(row=ws.max_row, column=6)
-        statut_cell.fill = fill_present if est_present else fill_absent
-        statut_cell.alignment = Alignment(horizontal='center')
-
-    ws.column_dimensions['A'].width = 12
-    ws.column_dimensions['B'].width = 20
-    ws.column_dimensions['C'].width = 20
-    ws.column_dimensions['D'].width = 15
-    ws.column_dimensions['E'].width = 12
-    ws.column_dimensions['F'].width = 15
+    output = BytesIO()
+    wb.save(output)
+    output.seek(0)
 
     filename = f"presences_seance_{seance_id}_{seance.date}.xlsx"
     response = HttpResponse(
+        output.read(),
         content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     )
     response['Content-Disposition'] = f'attachment; filename="{filename}"'
-    wb.save(response)
     return response
 
 
