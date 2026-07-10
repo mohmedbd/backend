@@ -890,6 +890,7 @@ class ProgramManagerListViewSet(viewsets.ModelViewSet):
 class PlanificationViewSet(viewsets.ModelViewSet):
     authentication_classes = []
     permission_classes = [AllowAny]
+    queryset = Planification.objects.all()
     serializer_class = PlanificationSerializer
 
     def get_queryset(self):
