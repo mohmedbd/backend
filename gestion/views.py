@@ -603,7 +603,7 @@ class AdminListViewSet(viewsets.ModelViewSet):
 
 
 class StudentListViewSet(viewsets.ModelViewSet):
-    authentication_classes = [JWTAuthentication]
+    authentication_classes = []
     permission_classes = [AllowAny]
 
     def _get_request_user(self, request):
@@ -3091,7 +3091,7 @@ def export_modules_excel(request):
 
 
 @api_view(['GET'])
-@authentication_classes([JWTAuthentication])
+@authentication_classes([])
 @permission_classes([AllowAny])
 def debug_whoami(request):
     user = getattr(request, 'user', None)
@@ -3111,6 +3111,7 @@ def debug_whoami(request):
                 'id': u.id,
                 'roles': u.get_active_roles(),
                 'auth_method': 'manual_jwt_decode',
+                'token_roles': roles,
             })
         except User.DoesNotExist:
             return Response({'error': 'user_not_found', 'user_id': user_id, 'roles': roles})
