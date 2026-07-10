@@ -2402,102 +2402,101 @@ def etudiants_par_module(request):
     return Response(result)
 
 
+@api_view(['GET'])
+@authentication_classes([])
+@permission_classes([AllowAny])
 def export_etudiants_par_module_excel(request):
-    roles, user_id = get_role_from_request(request)
-    if not roles or not user_id:
-        return Response({'error': 'Authentification requise'}, status=401)
+    try:
+        roles, user_id = get_role_from_request(request)
+        if not roles or not user_id:
+            return Response({'error': 'Authentification requise'}, status=401)
 
-    modules = Module.objects.select_related('semestre__filiere').all()
-    if has_role(roles, 'head_of_department'):
-        try:
-            user = User.objects.get(id=user_id)
-        except User.DoesNotExist:
+        modules = Module.objects.select_related('semestre__filiere').all()
+        if has_role(roles, 'head_of_department'):
+            try:
+                user = User.objects.get(id=user_id)
+            except User.DoesNotExist:
+                return Response({'error': 'Acces non autorise'}, status=403)
+            hod = getattr(user, 'hod_profile', None)
+            if hod and hod.department_id:
+                modules = modules.filter(semestre__filiere__departement_id=hod.department_id)
+            else:
+                return Response({'error': 'Acces non autorise'}, status=403)
+        elif has_role(roles, 'program_manager'):
+            try:
+                user = User.objects.get(id=user_id)
+            except User.DoesNotExist:
+                return Response({'error': 'Acces non autorise'}, status=403)
+            pm = getattr(user, 'program_manager_profile', None)
+            if pm and pm.program_id:
+                modules = modules.filter(semestre__filiere_id=pm.program_id)
+            else:
+                return Response({'error': 'Acces non autorise'}, status=403)
+        elif not has_role(roles, 'admin'):
             return Response({'error': 'Acces non autorise'}, status=403)
-        hod = getattr(user, 'hod_profile', None)
-        if hod and hod.department_id:
-            modules = modules.filter(semestre__filiere__departement_id=hod.department_id)
-        else:
-            return Response({'error': 'Acces non autorise'}, status=403)
-    elif has_role(roles, 'program_manager'):
-        try:
-            user = User.objects.get(id=user_id)
-        except User.DoesNotExist:
-            return Response({'error': 'Acces non autorise'}, status=403)
-        pm = getattr(user, 'program_manager_profile', None)
-        if pm and pm.program_id:
-            modules = modules.filter(semestre__filiere_id=pm.program_id)
-        else:
-            return Response({'error': 'Acces non autorise'}, status=403)
-    elif not has_role(roles, 'admin'):
-        return Response({'error': 'Acces non autorise'}, status=403)
 
-    wb = openpyxl.Workbook()
-    ws = wb.active
-    ws.title = "Etudiants par module"
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Etudiants par module"
 
-    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+        from openpyxl.styles import Font, PatternFill, Alignment
 
-    title_font   = Font(bold=True, size=14, color="FFFFFF")
-    title_fill   = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
-    header_font  = Font(bold=True, size=11, color="FFFFFF")
-    header_fill  = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
-    thin_border  = Border(
-        left=Side(style='thin'), right=Side(style='thin'),
-        top=Side(style='thin'), bottom=Side(style='thin')
-    )
-    center_align = Alignment(horizontal='center', vertical='center')
+        title_font  = Font(bold=True, size=14, color="FFFFFF")
+        title_fill  = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
+        header_font = Font(bold=True, size=11, color="FFFFFF")
+        header_fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
+        center      = Alignment(horizontal='center', vertical='center')
 
-    ws.merge_cells('A1:H1')
-    c = ws['A1']
-    c.value = "LISTE DES ETUDIANTS PAR MODULE"
-    c.font = title_font; c.fill = title_fill; c.alignment = center_align
+        ws.merge_cells('A1:H1')
+        c = ws['A1']
+        c.value = "LISTE DES ETUDIANTS PAR MODULE"
+        c.font = title_font; c.fill = title_fill; c.alignment = center
 
-    headers = ["Filiere", "Semestre", "Module", "ID", "Prenom", "Nom", "Email", "CIE"]
-    header_row = 3
-    for col, h in enumerate(headers, start=1):
-        cell = ws.cell(row=header_row, column=col, value=h)
-        cell.font = header_font; cell.fill = header_fill
-        cell.alignment = center_align; cell.border = thin_border
+        headers = ["Filiere", "Semestre", "Module", "ID", "Prenom", "Nom", "Email", "CIE"]
+        header_row = 3
+        for col, h in enumerate(headers, start=1):
+            cell = ws.cell(row=header_row, column=col, value=h)
+            cell.font = header_font; cell.fill = header_fill
+            cell.alignment = center
 
-    row = header_row + 1
-    for module in modules:
-        students = User.objects.filter(
-            role_assignments__role__codename='student',
-            role_assignments__is_active=True,
-            student_profile__modules=module,
-        ).distinct().order_by('last_name', 'first_name')
+        row = header_row + 1
+        for module in modules:
+            students = User.objects.filter(
+                role_assignments__role__codename='student',
+                role_assignments__is_active=True,
+                student_profile__modules=module,
+            ).distinct().order_by('last_name', 'first_name')
 
-        filiere_name = module.semestre.filiere.nom_filiere if module.semestre and module.semestre.filiere else ''
-        semestre_name = module.semestre.nom_semestre if module.semestre else ''
+            filiere_name = module.semestre.filiere.nom_filiere if module.semestre and module.semestre.filiere else ''
+            semestre_name = module.semestre.nom_semestre if module.semestre else ''
 
-        for s in students:
-            cie = getattr(s.student_profile, 'CIE', '') if hasattr(s, 'student_profile') else ''
-            values = [filiere_name, semestre_name, module.nom_module, s.id, s.first_name, s.last_name, s.email, cie]
-            for col, v in enumerate(values, start=1):
-                cell = ws.cell(row=row, column=col, value=v)
-                cell.border = thin_border
-            row += 1
+            for s in students:
+                cie = getattr(s.student_profile, 'CIE', '') if hasattr(s, 'student_profile') else ''
+                values = [filiere_name, semestre_name, module.nom_module, s.id, s.first_name, s.last_name, s.email, cie]
+                for col, v in enumerate(values, start=1):
+                    ws.cell(row=row, column=col, value=v)
+                row += 1
 
-    widths = [16, 12, 24, 8, 18, 18, 30, 16]
-    letters = ['A','B','C','D','E','F','G','H']
-    for i, w in enumerate(widths):
-        ws.column_dimensions[letters[i]].width = w
+        for col_letter, w in {'A': 16, 'B': 12, 'C': 24, 'D': 8, 'E': 18, 'F': 18, 'G': 30, 'H': 16}.items():
+            ws.column_dimensions[col_letter].width = w
 
-    if row == header_row + 1:
-        ws.cell(row=row, column=1, value="Aucun etudiant trouve.")
+        if row == header_row + 1:
+            ws.cell(row=row, column=1, value="Aucun etudiant trouve.")
 
-    output = BytesIO()
-    wb.save(output)
-    output.seek(0)
+        output = BytesIO()
+        wb.save(output)
+        output.seek(0)
 
-    from datetime import date
-    filename = f"etudiants_par_module_{date.today().isoformat()}.xlsx"
-    response = HttpResponse(
-        output.read(),
-        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-    )
-    response['Content-Disposition'] = f'attachment; filename="{filename}"'
-    return response
+        from datetime import date
+        filename = f"etudiants_par_module_{date.today().isoformat()}.xlsx"
+        response = HttpResponse(
+            output.read(),
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        return response
+    except Exception as e:
+        return Response({'error': str(e)}, status=500)
 
 
 @api_view(['GET'])
