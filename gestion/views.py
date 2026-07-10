@@ -503,6 +503,13 @@ class StudentListViewSet(viewsets.ModelViewSet):
             instance.set_password(password)
         instance.save()
 
+        program_id = request.data.get('program_id') or request.data.get('filiere_id')
+        if program_id is not None:
+            profile = getattr(instance, 'student_profile', None)
+            if profile:
+                profile.program_id = program_id
+                profile.save()
+
         serializer = self.get_serializer(instance)
         return Response(serializer.data)
 
