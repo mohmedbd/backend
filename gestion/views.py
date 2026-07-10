@@ -30,7 +30,7 @@ from django.conf import settings
 def get_role_from_request(request):
     auth_header = request.headers.get('Authorization', '')
     if not auth_header.startswith('Bearer '):
-        return None
+        return None, None
     token_str = auth_header.split(' ')[1]
     try:
         payload = jwt.decode(token_str, settings.SECRET_KEY, algorithms=['HS256'])
@@ -404,7 +404,9 @@ class StudentListViewSet(viewsets.ModelViewSet):
         roles, _ = get_role_from_request(request)
         if not roles:
             return Response([], status=200)
-        return super().list(request, *args, **kwargs)
+        if has_role(roles, 'head_of_department') or has_role(roles, 'admin'):
+            return super().list(request, *args, **kwargs)
+        return Response([], status=200)
 
     def _get_hod_dept_id(self, request):
         roles, user_id = get_role_from_request(request)
@@ -566,7 +568,9 @@ class ProfessorListViewSet(viewsets.ModelViewSet):
         roles, _ = get_role_from_request(request)
         if not roles:
             return Response([], status=200)
-        return super().list(request, *args, **kwargs)
+        if has_role(roles, 'head_of_department') or has_role(roles, 'admin'):
+            return super().list(request, *args, **kwargs)
+        return Response([], status=200)
 
     def create(self, request, *args, **kwargs):
         user, hod_dept_id = self._get_user_and_dept(request)
