@@ -2502,6 +2502,7 @@ def absences(request):
                 'student_id': s.id,
                 'nom': s.last_name,
                 'prenom': s.first_name,
+                'email': s.email,
                 'CIE': getattr(s.student_profile, 'CIE', '') if hasattr(s, 'student_profile') else '',
                 'present': is_present,
                 'heure_scan': str(p.heure_scan) if p else None,
