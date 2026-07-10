@@ -1914,12 +1914,22 @@ def scanner_presence(request):
     except StudentProfile.DoesNotExist:
         return Response({'error': 'CIE introuvable'}, status=404)
 
-    if student_profile.program_id and student_profile.program_id != seance.planification.filiere_id:
-        return Response({
-            'error': 'Vous n\'etes pas inscrit dans cette filiere',
-            'filiere_etudiant': student_profile.program.nom_filiere if student_profile.program else '',
-            'filiere_seance': seance.planification.filiere.nom_filiere,
-        }, status=403)
+    module_ref = seance.planification.module_ref
+    if module_ref:
+        is_enrolled_in_module = student_profile.modules.filter(id=module_ref.id).exists()
+        if not is_enrolled_in_module:
+            if not (student_profile.program_id and student_profile.program_id == seance.planification.filiere_id):
+                return Response({
+                    'error': 'Vous n\'etes pas inscrit dans ce module',
+                    'module': module_ref.nom_module,
+                }, status=403)
+    else:
+        if student_profile.program_id and student_profile.program_id != seance.planification.filiere_id:
+            return Response({
+                'error': 'Vous n\'etes pas inscrit dans cette filiere',
+                'filiere_etudiant': student_profile.program.nom_filiere if student_profile.program else '',
+                'filiere_seance': seance.planification.filiere.nom_filiere,
+            }, status=403)
 
     if Presence.objects.filter(student=student_profile.user, seance=seance).exists():
         return Response({'error': 'Presence deja enregistree'}, status=400)
