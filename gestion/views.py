@@ -1859,6 +1859,169 @@ def emploi_du_temps_etudiant(request):
     return Response(data, status=200)
 
 
+@api_view(['POST'])
+@authentication_classes([])
+@permission_classes([AllowAny])
+def importer_etudiants(request):
+    """Import students from an Excel file (.xlsx)."""
+    excel_file = request.FILES.get('file')
+    if not excel_file:
+        return Response({'error': 'Aucun fichier fourni'}, status=400)
+
+    if not excel_file.name.endswith(('.xlsx', '.xls')):
+        return Response({'error': 'Format de fichier invalide. Utilisez un fichier .xlsx'}, status=400)
+
+    try:
+        wb = openpyxl.load_workbook(excel_file, read_only=True)
+        ws = wb.active
+        rows = list(ws.iter_rows(values_only=True))
+    except Exception as e:
+        return Response({'error': f'Erreur de lecture du fichier: {str(e)}'}, status=400)
+
+    if len(rows) < 2:
+        return Response({'error': 'Le fichier est vide ou ne contient que l\'en-tête'}, status=400)
+
+    header = [str(cell).strip().lower() if cell else '' for cell in rows[0]]
+
+    col_map = {}
+    expected_cols = ['nom', 'prenom', 'email', 'password', 'cie', 'filiere_id']
+    for col in expected_cols:
+        try:
+            col_map[col] = header.index(col)
+        except ValueError:
+            return Response({'error': f'Colonne "{col}" manquante dans le fichier'}, status=400)
+
+    try:
+        col_map['groupe'] = header.index('groupe')
+    except ValueError:
+        col_map['groupe'] = None
+
+    success_count = 0
+    errors = []
+    created_students = []
+
+    for i, row in enumerate(rows[1:], start=2):
+        try:
+            nom = str(row[col_map['nom']]).strip() if row[col_map['nom']] else ''
+            prenom = str(row[col_map['prenom']]).strip() if row[col_map['prenom']] else ''
+            email = str(row[col_map['email']]).strip().lower() if row[col_map['email']] else ''
+            password = str(row[col_map['password']]) if row[col_map['password']] else ''
+            cie = str(row[col_map['cie']]).strip() if row[col_map['cie']] else ''
+            filiere_id = row[col_map['filiere_id']]
+
+            if not nom or not prenom or not email or not password or not cie or filiere_id is None:
+                errors.append({'row': i, 'message': 'Champs obligatoires manquants'})
+                continue
+
+            if User.objects.filter(email=email).exists():
+                errors.append({'row': i, 'message': f'Email déjà utilisé: {email}'})
+                continue
+
+            if StudentProfile.objects.filter(CIE=cie).exists():
+                errors.append({'row': i, 'message': f'CNE déjà existant: {cie}'})
+                continue
+
+            try:
+                filiere_id = int(filiere_id)
+            except (ValueError, TypeError):
+                errors.append({'row': i, 'message': f'filiere_id invalide: {filiere_id}'})
+                continue
+
+            user = User.objects.create_user(
+                email=email, password=password,
+                first_name=prenom, last_name=nom,
+            )
+            from users.views import create_role_assignments, create_profile_for_role
+            create_role_assignments(user, [Role.STUDENT])
+            create_profile_for_role(user, Role.STUDENT, {
+                'CIE': cie,
+                'program_id': filiere_id,
+            })
+
+            created_students.append(user)
+            success_count += 1
+
+        except Exception as e:
+            errors.append({'row': i, 'message': str(e)})
+
+    return Response({
+        'success': success_count,
+        'total': len(rows) - 1,
+        'errors': errors,
+        'students_created': StudentUserSerializer(created_students, many=True).data,
+    })
+
+
+@api_view(['GET'])
+@authentication_classes([])
+@permission_classes([AllowAny])
+def etudiants_par_module(request):
+    """List students grouped by module based on planifications."""
+    roles, user_id = get_role_from_request(request)
+    if not roles or not user_id:
+        return Response([], status=200)
+
+    planifications = Planification.objects.all().select_related('filiere')
+
+    if has_role(roles, 'head_of_department'):
+        try:
+            user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            return Response([], status=200)
+        hod = getattr(user, 'hod_profile', None)
+        if hod and hod.department_id:
+            planifications = planifications.filter(filiere__departement_id=hod.department_id)
+        else:
+            return Response([], status=200)
+    elif has_role(roles, 'program_manager'):
+        try:
+            user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            return Response([], status=200)
+        pm = getattr(user, 'program_manager_profile', None)
+        if pm and pm.program_id:
+            planifications = planifications.filter(filiere_id=pm.program_id)
+        else:
+            return Response([], status=200)
+    elif not has_role(roles, 'admin'):
+        return Response([], status=200)
+
+    module_data = {}
+    for plan in planifications:
+        module_name = plan.module
+        if not module_name:
+            continue
+        filiere_id = plan.filiere_id
+        filiere_name = plan.filiere.nom_filiere if plan.filiere else ''
+
+        if module_name not in module_data:
+            module_data[module_name] = {
+                'module': module_name,
+                'filieres': set(),
+                'filiere_ids': set(),
+            }
+        module_data[module_name]['filieres'].add(filiere_name)
+        module_data[module_name]['filiere_ids'].add(filiere_id)
+
+    result = []
+    for module_name, data in module_data.items():
+        students = User.objects.filter(
+            role_assignments__role__codename='student',
+            role_assignments__is_active=True,
+            student_profile__program_id__in=data['filiere_ids'],
+        ).distinct().order_by('last_name', 'first_name')
+
+        result.append({
+            'module': module_name,
+            'filieres': sorted(data['filieres']),
+            'etudiants': StudentUserSerializer(students, many=True).data,
+            'total': students.count(),
+        })
+
+    result.sort(key=lambda x: x['module'])
+    return Response(result)
+
+
 @api_view(['GET'])
 @authentication_classes([])
 @permission_classes([AllowAny])

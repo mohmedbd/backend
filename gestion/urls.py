@@ -10,7 +10,8 @@ from .views import (
 from .views import (
     verifier_etudiant, liste_presences_seance, export_seance_excel,
     scanner_presence, update_profile_photo, my_profile,
-    mes_planifications, mes_planifications_detail, emploi_du_temps_etudiant
+    mes_planifications, mes_planifications_detail, emploi_du_temps_etudiant,
+    importer_etudiants, etudiants_par_module
 )
 
 router = DefaultRouter()
@@ -40,5 +41,7 @@ urlpatterns = [
     path('mes-planifications/', mes_planifications, name='mes-planifications'),
     path('mes-planifications/<int:planification_id>/', mes_planifications_detail, name='mes-planifications-detail'),
     path('etudiants/emploi-du-temps/', emploi_du_temps_etudiant, name='emploi-du-temps-etudiant'),
+    path('etudiants/importer/', importer_etudiants, name='importer-etudiants'),
+    path('etudiants/par-module/', etudiants_par_module, name='etudiants-par-module'),
     path('', include(router.urls)),
 ]
