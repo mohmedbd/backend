@@ -15,7 +15,7 @@ from .views import (
     export_etudiants_par_module_excel,
     absences, export_absences_excel,
     export_etudiants_excel, export_modules_excel,
-    audit_logs,
+    audit_logs, debug_whoami,
 )
 
 router = DefaultRouter()
@@ -56,5 +56,6 @@ urlpatterns = [
     path('etudiants/export/', export_etudiants_excel, name='export-etudiants'),
     path('modules/export/', export_modules_excel, name='export-modules'),
     path('audit-logs/', audit_logs, name='audit-logs'),
+    path('debug/whoami/', debug_whoami, name='debug-whoami'),
     path('', include(router.urls)),
 ]

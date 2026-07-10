@@ -1,3 +1,5 @@
+import logging
+
 from rest_framework import viewsets
 from rest_framework.permissions import AllowAny
 from rest_framework_simplejwt.authentication import JWTAuthentication
@@ -8,6 +10,8 @@ from rest_framework import status
 from django.utils import timezone
 from django.db.models import Q
 from datetime import timedelta
+
+logger = logging.getLogger(__name__)
 from rest_framework_simplejwt.tokens import AccessToken as AT
 
 from .models import Departement, Filiere, Semestre, Module, Salle, Planification, SeanceQR, QRCode, Presence, AuditLog
@@ -660,7 +664,10 @@ class StudentListViewSet(viewsets.ModelViewSet):
     def _can_access_student(self, request, student_user=None):
         user = self._get_request_user(request)
         if not user:
+            logger.warning(f"[403 DEBUG] _get_request_user returned None. Auth header: {request.headers.get('Authorization', '')[0:30]}")
             return False
+        active_roles = user.get_active_roles()
+        logger.info(f"[403 DEBUG] User email={user.email}, id={user.id}, roles={active_roles}")
         active_roles = user.get_active_roles()
         if Role.ADMIN in active_roles:
             return True
@@ -3081,6 +3088,37 @@ def export_modules_excel(request):
         return response
     except Exception as e:
         return Response({'error': str(e)}, status=500)
+
+
+@api_view(['GET'])
+@authentication_classes([JWTAuthentication])
+@permission_classes([AllowAny])
+def debug_whoami(request):
+    user = getattr(request, 'user', None)
+    if user and user.is_authenticated:
+        return Response({
+            'email': user.email,
+            'id': user.id,
+            'roles': user.get_active_roles(),
+            'auth_method': 'JWTAuthentication',
+        })
+    roles, user_id = get_role_from_request(request)
+    if user_id:
+        try:
+            u = User.objects.get(id=user_id)
+            return Response({
+                'email': u.email,
+                'id': u.id,
+                'roles': u.get_active_roles(),
+                'auth_method': 'manual_jwt_decode',
+            })
+        except User.DoesNotExist:
+            return Response({'error': 'user_not_found', 'user_id': user_id, 'roles': roles})
+    return Response({
+        'error': 'no_auth',
+        'auth_header_present': bool(request.headers.get('Authorization', '')),
+        'auth_header_prefix': request.headers.get('Authorization', '')[:10] if request.headers.get('Authorization') else None,
+    }, status=401)
 
 
 @api_view(['GET'])
