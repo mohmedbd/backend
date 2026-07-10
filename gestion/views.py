@@ -309,7 +309,7 @@ class ModuleViewSet(viewsets.ModelViewSet):
 
         semestre = self.request.GET.get('semestre')
         if semestre:
-            qs = qs.filter(semestre_id=semestre)
+            qs = qs.filter(semestre__id=semestre)
 
         active_roles = user.get_active_roles()
         if Role.ADMIN in active_roles:
@@ -340,15 +340,15 @@ class ModuleViewSet(viewsets.ModelViewSet):
             hod = getattr(user, 'hod_profile', None)
             if not hod or not hod.department_id:
                 return False
-            if module is not None and module.semestre:
-                return module.semestre.filiere.departement_id == hod.department_id
+            if module is not None:
+                return module.semestre.filter(filiere__departement_id=hod.department_id).exists()
             return True
         if Role.PROGRAM_MANAGER in active_roles:
             pm = getattr(user, 'program_manager_profile', None)
             if not pm or not pm.program_id:
                 return False
             if module is not None:
-                return module.semestre.filiere_id == pm.program_id
+                return module.semestre.filter(filiere_id=pm.program_id).exists()
             return True
         return False
 
@@ -1300,7 +1300,7 @@ class PlanificationViewSet(viewsets.ModelViewSet):
             if not Semestre.objects.filter(id=semestre_id, filiere_id=filiere_id).exists():
                 return Response({'error': 'Semestre invalide pour cette filiere'}, status=400)
         if module_ref_id and semestre_id:
-            if not Module.objects.filter(id=module_ref_id, semestre_id=semestre_id).exists():
+            if not Module.objects.filter(id=module_ref_id, semestre__id=semestre_id).exists():
                 return Response({'error': 'Module invalide pour ce semestre'}, status=400)
         return super().create(request, *args, **kwargs)
 
@@ -2097,7 +2097,7 @@ def mes_planifications(request):
         if not Semestre.objects.filter(id=semestre_id, filiere_id=filiere_id).exists():
             return Response({'error': 'Semestre invalide pour cette filiere'}, status=400)
     if module_ref_id and semestre_id:
-        if not Module.objects.filter(id=module_ref_id, semestre_id=semestre_id).exists():
+        if not Module.objects.filter(id=module_ref_id, semestre__id=semestre_id).exists():
             return Response({'error': 'Module invalide pour ce semestre'}, status=400)
 
     serializer = PlanificationSerializer(data=data)
@@ -2422,7 +2422,7 @@ def etudiants_par_module(request):
     if not roles or not user_id:
         return Response([], status=200)
 
-    modules = Module.objects.select_related('semestre__filiere').all()
+    modules = Module.objects.prefetch_related('semestre__filiere').all()
     if has_role(roles, 'head_of_department'):
         try:
             user = User.objects.get(id=user_id)
@@ -2454,13 +2454,17 @@ def etudiants_par_module(request):
             student_profile__modules=module,
         ).distinct().order_by('last_name', 'first_name')
 
-        filiere_name = module.semestre.filiere.nom_filiere if module.semestre and module.semestre.filiere else ''
+        semestres = module.semestre.all()
+        filiere_names = ', '.join(set(
+            s.filiere.nom_filiere for s in semestres if s.filiere
+        ))
+        semestre_names = ', '.join(s.nom_semestre for s in semestres)
 
         result.append({
             'module_id': module.id,
             'module': module.nom_module,
-            'semestre': module.semestre.nom_semestre,
-            'filiere': filiere_name,
+            'semestre': semestre_names,
+            'filiere': filiere_names,
             'etudiants': StudentUserSerializer(students, many=True).data,
             'total': students.count(),
         })
@@ -2474,7 +2478,7 @@ def etudiants_par_module(request):
 def export_etudiants_par_module_excel(request):
     try:
         roles, user_id = get_role_from_request(request)
-        modules = Module.objects.select_related('semestre__filiere').all()
+        modules = Module.objects.prefetch_related('semestre__filiere').all()
         if has_role(roles, 'head_of_department'):
             try:
                 user = User.objects.get(id=user_id)
@@ -2530,8 +2534,11 @@ def export_etudiants_par_module_excel(request):
                 student_profile__modules=module,
             ).distinct().order_by('last_name', 'first_name')
 
-            filiere_name = module.semestre.filiere.nom_filiere if module.semestre and module.semestre.filiere else ''
-            semestre_name = module.semestre.nom_semestre if module.semestre else ''
+            semestres = module.semestre.all()
+            filiere_name = ', '.join(set(
+                s.filiere.nom_filiere for s in semestres if s.filiere
+            ))
+            semestre_name = ', '.join(s.nom_semestre for s in semestres)
 
             for s in students:
                 cie = getattr(s.student_profile, 'CIE', '') if hasattr(s, 'student_profile') else ''
@@ -3011,7 +3018,7 @@ def export_etudiants_excel(request):
 def export_modules_excel(request):
     try:
         roles, user_id = get_role_from_request(request)
-        qs = Module.objects.select_related('semestre__filiere').all()
+        qs = Module.objects.prefetch_related('semestre__filiere').all()
 
         if has_role(roles, 'admin'):
             pass
@@ -3077,8 +3084,11 @@ def export_modules_excel(request):
 
         row = header_row + 1
         for m in qs:
-            filiere_name = m.semestre.filiere.nom_filiere if m.semestre and m.semestre.filiere else ''
-            semestre_name = m.semestre.nom_semestre if m.semestre else ''
+            semestres = m.semestre.all()
+            filiere_name = ', '.join(set(
+                s.filiere.nom_filiere for s in semestres if s.filiere
+            ))
+            semestre_name = ', '.join(s.nom_semestre for s in semestres)
             values = [m.id, m.nom_module, semestre_name, filiere_name]
             for col, v in enumerate(values, start=1):
                 ws.cell(row=row, column=col, value=v)

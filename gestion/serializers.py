@@ -26,13 +26,26 @@ class SemestreSerializer(serializers.ModelSerializer):
 
 
 class ModuleSerializer(serializers.ModelSerializer):
-    semestre_name = serializers.CharField(source='semestre.nom_semestre', read_only=True)
-    filiere = serializers.IntegerField(source='semestre.filiere_id', read_only=True)
-    filiere_name = serializers.CharField(source='semestre.filiere.nom_filiere', read_only=True)
+    semestre = serializers.PrimaryKeyRelatedField(many=True, queryset=Semestre.objects.all())
+    semestre_name = serializers.SerializerMethodField(read_only=True)
+    filiere = serializers.SerializerMethodField(read_only=True)
+    filiere_name = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = Module
         fields = ['id', 'nom_module', 'semestre', 'semestre_name', 'filiere', 'filiere_name']
+
+    def get_semestre_name(self, obj):
+        names = obj.semestre.values_list('nom_semestre', flat=True)
+        return ', '.join(names) if names else ''
+
+    def get_filiere(self, obj):
+        names = list(set(obj.semestre.values_list('filiere__nom_filiere', flat=True)))
+        return ', '.join(names) if names else ''
+
+    def get_filiere_name(self, obj):
+        names = list(set(obj.semestre.values_list('filiere__nom_filiere', flat=True)))
+        return ', '.join(names) if names else ''
 
 
 class SalleSerializer(serializers.ModelSerializer):

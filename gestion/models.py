@@ -39,13 +39,14 @@ class Semestre(models.Model):
 
 class Module(models.Model):
     nom_module = models.CharField(max_length=100)
-    semestre = models.ForeignKey(
-        Semestre, on_delete=models.CASCADE,
-        related_name='modules'
+    semestre = models.ManyToManyField(
+        Semestre, related_name='modules'
     )
 
     class Meta:
-        unique_together = ('nom_module', 'semestre')
+        constraints = [
+            models.UniqueConstraint(fields=['nom_module'], name='unique_module_name'),
+        ]
 
     def __str__(self):
         return self.nom_module
