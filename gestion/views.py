@@ -1169,6 +1169,10 @@ class PlanificationViewSet(viewsets.ModelViewSet):
             if planification is not None:
                 return planification.filiere_id == pm.program_id
             return True
+        if has_role(roles, 'professor'):
+            if planification is not None:
+                return planification.professor.id == user_id
+            return True
         return False
 
     def list(self, request, *args, **kwargs):
@@ -1207,12 +1211,12 @@ class PlanificationViewSet(viewsets.ModelViewSet):
             if int(filiere_id) != pm.program_id:
                 return Response({'error': 'Filiere hors de votre ressort'}, status=403)
         semestre_id = request.data.get('semestre')
-        module_id = request.data.get('module')
+        module_ref_id = request.data.get('module_ref')
         if semestre_id and filiere_id:
             if not Semestre.objects.filter(id=semestre_id, filiere_id=filiere_id).exists():
                 return Response({'error': 'Semestre invalide pour cette filiere'}, status=400)
-        if module_id and semestre_id:
-            if not Module.objects.filter(id=module_id, semestre_id=semestre_id).exists():
+        if module_ref_id and semestre_id:
+            if not Module.objects.filter(id=module_ref_id, semestre_id=semestre_id).exists():
                 return Response({'error': 'Module invalide pour ce semestre'}, status=400)
         return super().create(request, *args, **kwargs)
 
@@ -1971,12 +1975,12 @@ def mes_planifications(request):
 
     filiere_id = data.get('filiere')
     semestre_id = data.get('semestre')
-    module_id = data.get('module')
+    module_ref_id = data.get('module_ref')
     if semestre_id and filiere_id:
         if not Semestre.objects.filter(id=semestre_id, filiere_id=filiere_id).exists():
             return Response({'error': 'Semestre invalide pour cette filiere'}, status=400)
-    if module_id and semestre_id:
-        if not Module.objects.filter(id=module_id, semestre_id=semestre_id).exists():
+    if module_ref_id and semestre_id:
+        if not Module.objects.filter(id=module_ref_id, semestre_id=semestre_id).exists():
             return Response({'error': 'Module invalide pour ce semestre'}, status=400)
 
     serializer = PlanificationSerializer(data=data)
