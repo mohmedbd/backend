@@ -606,42 +606,41 @@ class StudentListViewSet(viewsets.ModelViewSet):
     authentication_classes = []
     permission_classes = [AllowAny]
 
-    def _get_request_user(self, request):
-        user = getattr(request, 'user', None)
-        if user and user.is_authenticated:
-            return user
-        roles, user_id = get_role_from_request(request)
-        if user_id:
-            try:
-                return User.objects.get(id=user_id)
-            except User.DoesNotExist:
-                pass
-        return None
-
     def get_queryset(self):
         qs = User.objects.filter(
             role_assignments__role__codename='student',
             role_assignments__is_active=True
         )
-        user = self._get_request_user(self.request)
-        if not user:
+        roles, user_id = get_role_from_request(self.request)
+        if not roles or not user_id:
             return qs.none()
-        active_roles = user.get_active_roles()
-        if Role.ADMIN in active_roles:
+        if has_role(roles, 'admin'):
             return qs
-        if Role.HEAD_OF_DEPARTMENT in active_roles:
+        if has_role(roles, 'head_of_department'):
+            try:
+                user = User.objects.get(id=user_id)
+            except User.DoesNotExist:
+                return qs.none()
             hod = getattr(user, 'hod_profile', None)
             if hod and hod.department_id:
                 return qs.filter(
                     student_profile__program__departement_id=hod.department_id
                 )
             return qs.none()
-        if Role.PROGRAM_MANAGER in active_roles:
+        if has_role(roles, 'program_manager'):
+            try:
+                user = User.objects.get(id=user_id)
+            except User.DoesNotExist:
+                return qs.none()
             pm = getattr(user, 'program_manager_profile', None)
             if pm and pm.program_id:
                 return qs.filter(student_profile__program_id=pm.program_id)
             return qs.none()
-        if Role.PROFESSOR in active_roles:
+        if has_role(roles, 'professor'):
+            try:
+                user = User.objects.get(id=user_id)
+            except User.DoesNotExist:
+                return qs.none()
             prof = getattr(user, 'professor_profile', None)
             if prof:
                 dept_ids = prof.departements.values_list('id', flat=True)
@@ -653,25 +652,27 @@ class StudentListViewSet(viewsets.ModelViewSet):
         return StudentUserSerializer
 
     def list(self, request, *args, **kwargs):
-        user = self._get_request_user(request)
-        if not user:
+        roles, _ = get_role_from_request(request)
+        if not roles:
             return Response([], status=200)
-        active_roles = user.get_active_roles()
-        if Role.HEAD_OF_DEPARTMENT in active_roles or Role.ADMIN in active_roles or Role.PROGRAM_MANAGER in active_roles or Role.PROFESSOR in active_roles:
+        if has_role(roles, 'head_of_department') or has_role(roles, 'admin') or has_role(roles, 'program_manager') or has_role(roles, 'professor'):
             return super().list(request, *args, **kwargs)
         return Response([], status=200)
 
-    def _can_access_student(self, request, student_user=None):
-        user = self._get_request_user(request)
-        if not user:
-            logger.warning(f"[403 DEBUG] _get_request_user returned None. Auth header: {request.headers.get('Authorization', '')[0:30]}")
-            return False
-        active_roles = user.get_active_roles()
-        logger.info(f"[403 DEBUG] User email={user.email}, id={user.id}, roles={active_roles}")
-        active_roles = user.get_active_roles()
-        if Role.ADMIN in active_roles:
+    def _get_user_and_roles(self, request):
+        roles, user_id = get_role_from_request(request)
+        if not roles or not user_id:
+            return None, None
+        try:
+            user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            return None, None
+        return user, roles
+
+    def _can_access_student(self, user, roles, student_user=None):
+        if has_role(roles, 'admin') or Role.ADMIN in user.get_active_roles():
             return True
-        if Role.HEAD_OF_DEPARTMENT in active_roles:
+        if has_role(roles, 'head_of_department'):
             hod = getattr(user, 'hod_profile', None)
             if not hod or not hod.department_id:
                 return False
@@ -681,7 +682,7 @@ class StudentListViewSet(viewsets.ModelViewSet):
                     return sp.program.departement_id == hod.department_id
                 return False
             return True
-        if Role.PROGRAM_MANAGER in active_roles:
+        if has_role(roles, 'program_manager'):
             pm = getattr(user, 'program_manager_profile', None)
             if not pm or not pm.program_id:
                 return False
@@ -694,14 +695,13 @@ class StudentListViewSet(viewsets.ModelViewSet):
         return False
 
     def create(self, request, *args, **kwargs):
-        if not self._can_access_student(request):
-            return Response({'error': 'Acces non autorise'}, status=403)
-        filiere_id = request.data.get('program_id') or request.data.get('filiere_id')
-        user = self._get_request_user(request)
+        user, roles = self._get_user_and_roles(request)
         if not user:
             return Response({'error': 'Authentification requise'}, status=401)
-        active_roles = user.get_active_roles()
-        if Role.PROGRAM_MANAGER in active_roles:
+        if not self._can_access_student(user, roles):
+            return Response({'error': 'Acces non autorise'}, status=403)
+        filiere_id = request.data.get('program_id') or request.data.get('filiere_id')
+        if has_role(roles, 'program_manager'):
             pm = getattr(user, 'program_manager_profile', None)
             if not pm or not pm.program_id:
                 return Response({'error': 'Acces non autorise'}, status=403)
@@ -710,20 +710,29 @@ class StudentListViewSet(viewsets.ModelViewSet):
         return self._create_user(request, Role.STUDENT)
 
     def update(self, request, *args, **kwargs):
+        user, roles = self._get_user_and_roles(request)
+        if not user:
+            return Response({'error': 'Authentification requise'}, status=401)
         instance = self.get_object()
-        if not self._can_access_student(request, instance):
+        if not self._can_access_student(user, roles, instance):
             return Response({'error': 'Acces non autorise a cet etudiant'}, status=403)
         return self._update_user(request, *args, **kwargs)
 
     def partial_update(self, request, *args, **kwargs):
+        user, roles = self._get_user_and_roles(request)
+        if not user:
+            return Response({'error': 'Authentification requise'}, status=401)
         instance = self.get_object()
-        if not self._can_access_student(request, instance):
+        if not self._can_access_student(user, roles, instance):
             return Response({'error': 'Acces non autorise a cet etudiant'}, status=403)
         return self._update_user(request, *args, **kwargs)
 
     def destroy(self, request, *args, **kwargs):
+        user, roles = self._get_user_and_roles(request)
+        if not user:
+            return Response({'error': 'Authentification requise'}, status=401)
         instance = self.get_object()
-        if not self._can_access_student(request, instance):
+        if not self._can_access_student(user, roles, instance):
             return Response({'error': 'Acces non autorise a cet etudiant'}, status=403)
         info = f"{instance.first_name} {instance.last_name} ({instance.email})"
         result = super().destroy(request, *args, **kwargs)
