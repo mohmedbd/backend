@@ -395,6 +395,15 @@ class StudentListViewSet(viewsets.ModelViewSet):
                     student_profile__program__departement_id=hod.department_id
                 )
             return qs.none()
+        if has_role(roles, 'program_manager'):
+            try:
+                user = User.objects.get(id=user_id)
+            except User.DoesNotExist:
+                return qs.none()
+            pm = getattr(user, 'program_manager_profile', None)
+            if pm and pm.program_id:
+                return qs.filter(student_profile__program_id=pm.program_id)
+            return qs.none()
         return qs.none()
 
     def get_serializer_class(self):
@@ -404,34 +413,42 @@ class StudentListViewSet(viewsets.ModelViewSet):
         roles, _ = get_role_from_request(request)
         if not roles:
             return Response([], status=200)
-        if has_role(roles, 'head_of_department') or has_role(roles, 'admin'):
+        if has_role(roles, 'head_of_department') or has_role(roles, 'admin') or has_role(roles, 'program_manager'):
             return super().list(request, *args, **kwargs)
         return Response([], status=200)
 
-    def _get_hod_dept_id(self, request):
+    def _can_access_student(self, request, student_user=None):
         roles, user_id = get_role_from_request(request)
         if not roles or not user_id:
-            return None
+            return False
+        if has_role(roles, 'admin'):
+            return True
         if has_role(roles, 'head_of_department'):
             try:
                 user = User.objects.get(id=user_id)
-                hod = getattr(user, 'hod_profile', None)
-                return hod.department_id if hod else None
             except User.DoesNotExist:
-                return None
-        if has_role(roles, 'admin'):
-            return '__admin__'
-        return None
-
-    def _can_access_student(self, request, student_user=None):
-        dept_id = self._get_hod_dept_id(request)
-        if dept_id == '__admin__':
-            return True
-        if dept_id:
+                return False
+            hod = getattr(user, 'hod_profile', None)
+            if not hod or not hod.department_id:
+                return False
             if student_user:
                 sp = getattr(student_user, 'student_profile', None)
                 if sp and sp.program:
-                    return sp.program.departement_id == dept_id
+                    return sp.program.departement_id == hod.department_id
+                return False
+            return True
+        if has_role(roles, 'program_manager'):
+            try:
+                user = User.objects.get(id=user_id)
+            except User.DoesNotExist:
+                return False
+            pm = getattr(user, 'program_manager_profile', None)
+            if not pm or not pm.program_id:
+                return False
+            if student_user:
+                sp = getattr(student_user, 'student_profile', None)
+                if sp:
+                    return sp.program_id == pm.program_id
                 return False
             return True
         return False
@@ -439,6 +456,18 @@ class StudentListViewSet(viewsets.ModelViewSet):
     def create(self, request, *args, **kwargs):
         if not self._can_access_student(request):
             return Response({'error': 'Acces non autorise'}, status=403)
+        filiere_id = request.data.get('program_id') or request.data.get('filiere_id')
+        roles, user_id = get_role_from_request(request)
+        if has_role(roles, 'program_manager'):
+            try:
+                user = User.objects.get(id=user_id)
+            except User.DoesNotExist:
+                return Response({'error': 'Utilisateur introuvable'}, status=404)
+            pm = getattr(user, 'program_manager_profile', None)
+            if not pm or not pm.program_id:
+                return Response({'error': 'Acces non autorise'}, status=403)
+            if int(filiere_id) != pm.program_id if filiere_id else True:
+                return Response({'error': 'Filiere hors de votre ressort'}, status=403)
         return self._create_user(request, Role.STUDENT)
 
     def update(self, request, *args, **kwargs):
@@ -539,6 +568,8 @@ class ProfessorListViewSet(viewsets.ModelViewSet):
                     professor_profile__departements=hod.department_id
                 )
             return qs.none()
+        if has_role(roles, 'program_manager'):
+            return qs
         return qs.none()
 
     def get_serializer_class(self):
@@ -575,7 +606,7 @@ class ProfessorListViewSet(viewsets.ModelViewSet):
         roles, _ = get_role_from_request(request)
         if not roles:
             return Response([], status=200)
-        if has_role(roles, 'head_of_department') or has_role(roles, 'admin'):
+        if has_role(roles, 'head_of_department') or has_role(roles, 'admin') or has_role(roles, 'program_manager'):
             return super().list(request, *args, **kwargs)
         return Response([], status=200)
 
@@ -910,6 +941,17 @@ class PlanificationViewSet(viewsets.ModelViewSet):
                     filiere__departement_id=hod.department_id
                 )
             return Planification.objects.none()
+        if has_role(roles, 'program_manager'):
+            try:
+                user = User.objects.get(id=user_id)
+            except User.DoesNotExist:
+                return Planification.objects.none()
+            pm = getattr(user, 'program_manager_profile', None)
+            if pm and pm.program_id:
+                return Planification.objects.filter(
+                    filiere_id=pm.program_id
+                )
+            return Planification.objects.none()
         return Planification.objects.none()
 
     def _can_manage(self, roles, user_id, planification=None):
@@ -925,6 +967,17 @@ class PlanificationViewSet(viewsets.ModelViewSet):
                 return False
             if planification is not None:
                 return planification.filiere.departement_id == hod.department_id
+            return True
+        if has_role(roles, 'program_manager'):
+            try:
+                user = User.objects.get(id=user_id)
+            except User.DoesNotExist:
+                return False
+            pm = getattr(user, 'program_manager_profile', None)
+            if not pm or not pm.program_id:
+                return False
+            if planification is not None:
+                return planification.filiere_id == pm.program_id
             return True
         return False
 
@@ -953,6 +1006,16 @@ class PlanificationViewSet(viewsets.ModelViewSet):
                 return Response({'error': 'Acces non autorise'}, status=403)
             if not Filiere.objects.filter(id=filiere_id, departement_id=hod.department_id).exists():
                 return Response({'error': 'Filiere hors de votre departement'}, status=403)
+        if has_role(roles, 'program_manager'):
+            try:
+                user = User.objects.get(id=user_id)
+            except User.DoesNotExist:
+                return Response({'error': 'Utilisateur introuvable'}, status=404)
+            pm = getattr(user, 'program_manager_profile', None)
+            if not pm or not pm.program_id:
+                return Response({'error': 'Acces non autorise'}, status=403)
+            if int(filiere_id) != pm.program_id:
+                return Response({'error': 'Filiere hors de votre ressort'}, status=403)
         return super().create(request, *args, **kwargs)
 
     def update(self, request, *args, **kwargs):
@@ -1006,6 +1069,17 @@ class SeanceQRViewSet(viewsets.ModelViewSet):
                     planification__filiere__departement_id=hod.department_id
                 )
             return SeanceQR.objects.none()
+        if has_role(roles, 'program_manager'):
+            try:
+                user = User.objects.get(id=user_id)
+            except User.DoesNotExist:
+                return SeanceQR.objects.none()
+            pm = getattr(user, 'program_manager_profile', None)
+            if pm and pm.program_id:
+                return SeanceQR.objects.filter(
+                    planification__filiere_id=pm.program_id
+                )
+            return SeanceQR.objects.none()
         if has_role(roles, 'professor'):
             return SeanceQR.objects.filter(planification__professor_id=user_id)
         return SeanceQR.objects.none()
@@ -1054,6 +1128,17 @@ class PresenceViewSet(viewsets.ModelViewSet):
             if hod and hod.department_id:
                 return Presence.objects.filter(
                     seance__planification__filiere__departement_id=hod.department_id
+                )
+            return Presence.objects.none()
+        if has_role(roles, 'program_manager'):
+            try:
+                user = User.objects.get(id=user_id)
+            except User.DoesNotExist:
+                return Presence.objects.none()
+            pm = getattr(user, 'program_manager_profile', None)
+            if pm and pm.program_id:
+                return Presence.objects.filter(
+                    seance__planification__filiere_id=pm.program_id
                 )
             return Presence.objects.none()
         if has_role(roles, 'professor'):
@@ -1397,6 +1482,16 @@ def export_seance_excel(request, seance_id):
             return Response({'error': 'Acces non autorise'}, status=403)
         if seance.planification.filiere.departement_id != hod.department_id:
             return Response({'error': 'Seance hors de votre departement'}, status=403)
+    elif has_role(roles, 'program_manager'):
+        try:
+            user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            return Response({'error': 'Acces non autorise'}, status=403)
+        pm = getattr(user, 'program_manager_profile', None)
+        if not pm or not pm.program_id:
+            return Response({'error': 'Acces non autorise'}, status=403)
+        if seance.planification.filiere_id != pm.program_id:
+            return Response({'error': 'Seance hors de votre filiere'}, status=403)
     else:
         return Response({'error': 'Acces non autorise'}, status=403)
 
