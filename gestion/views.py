@@ -199,6 +199,12 @@ class SemestreViewSet(viewsets.ModelViewSet):
             if pm and pm.program_id:
                 return qs.filter(filiere_id=pm.program_id)
             return Semestre.objects.none()
+        if Role.PROFESSOR in active_roles:
+            prof = getattr(user, 'professor_profile', None)
+            if prof:
+                dept_ids = prof.departements.values_list('id', flat=True)
+                return qs.filter(filiere__departement_id__in=dept_ids)
+            return Semestre.objects.none()
         return Semestre.objects.none()
 
     def _can_write(self, user, semestre=None):
@@ -293,6 +299,12 @@ class ModuleViewSet(viewsets.ModelViewSet):
             pm = getattr(user, 'program_manager_profile', None)
             if pm and pm.program_id:
                 return qs.filter(semestre__filiere_id=pm.program_id)
+            return Module.objects.none()
+        if Role.PROFESSOR in active_roles:
+            prof = getattr(user, 'professor_profile', None)
+            if prof:
+                dept_ids = prof.departements.values_list('id', flat=True)
+                return qs.filter(semestre__filiere__departement_id__in=dept_ids)
             return Module.objects.none()
         return Module.objects.none()
 
