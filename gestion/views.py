@@ -890,25 +890,95 @@ class ProgramManagerListViewSet(viewsets.ModelViewSet):
 class PlanificationViewSet(viewsets.ModelViewSet):
     authentication_classes = []
     permission_classes = [AllowAny]
-    queryset = Planification.objects.all()
     serializer_class = PlanificationSerializer
 
-    def update(self, request, *args, **kwargs):
+    def get_queryset(self):
+        roles, user_id = get_role_from_request(self.request)
+        if not roles or not user_id:
+            return Planification.objects.none()
+        if has_role(roles, 'admin'):
+            return Planification.objects.all()
+        if has_role(roles, 'head_of_department'):
+            try:
+                user = User.objects.get(id=user_id)
+            except User.DoesNotExist:
+                return Planification.objects.none()
+            hod = getattr(user, 'hod_profile', None)
+            if hod and hod.department_id:
+                return Planification.objects.filter(
+                    filiere__departement_id=hod.department_id
+                )
+            return Planification.objects.none()
+        return Planification.objects.none()
+
+    def _can_manage(self, roles, user_id, planification=None):
+        if has_role(roles, 'admin'):
+            return True
+        if has_role(roles, 'head_of_department'):
+            try:
+                user = User.objects.get(id=user_id)
+            except User.DoesNotExist:
+                return False
+            hod = getattr(user, 'hod_profile', None)
+            if not hod or not hod.department_id:
+                return False
+            if planification is not None:
+                return planification.filiere.departement_id == hod.department_id
+            return True
+        return False
+
+    def list(self, request, *args, **kwargs):
         roles, _ = get_role_from_request(request)
-        if not has_role(roles, 'admin'):
-            return Response({'error': 'Reserve aux administrateurs'}, status=403)
+        if not roles:
+            return Response([], status=200)
+        return super().list(request, *args, **kwargs)
+
+    def create(self, request, *args, **kwargs):
+        roles, user_id = get_role_from_request(request)
+        if not roles or not user_id:
+            return Response({'error': 'Authentification requise'}, status=401)
+        if not self._can_manage(roles, user_id):
+            return Response({'error': 'Acces non autorise'}, status=403)
+        filiere_id = request.data.get('filiere')
+        if not filiere_id:
+            return Response({'error': 'Filiere requise'}, status=400)
+        if has_role(roles, 'head_of_department'):
+            try:
+                user = User.objects.get(id=user_id)
+            except User.DoesNotExist:
+                return Response({'error': 'Utilisateur introuvable'}, status=404)
+            hod = getattr(user, 'hod_profile', None)
+            if not hod or not hod.department_id:
+                return Response({'error': 'Acces non autorise'}, status=403)
+            if not Filiere.objects.filter(id=filiere_id, departement_id=hod.department_id).exists():
+                return Response({'error': 'Filiere hors de votre departement'}, status=403)
+        return super().create(request, *args, **kwargs)
+
+    def update(self, request, *args, **kwargs):
+        roles, user_id = get_role_from_request(request)
+        if not roles or not user_id:
+            return Response({'error': 'Authentification requise'}, status=401)
+        instance = self.get_object()
+        if not self._can_manage(roles, user_id, instance):
+            return Response({'error': 'Acces non autorise'}, status=403)
         return super().update(request, *args, **kwargs)
 
     def partial_update(self, request, *args, **kwargs):
-        roles, _ = get_role_from_request(request)
-        if not has_role(roles, 'admin'):
-            return Response({'error': 'Reserve aux administrateurs'}, status=403)
+        roles, user_id = get_role_from_request(request)
+        if not roles or not user_id:
+            return Response({'error': 'Authentification requise'}, status=401)
+        instance = self.get_object()
+        if not self._can_manage(roles, user_id, instance):
+            return Response({'error': 'Acces non autorise'}, status=403)
         return super().partial_update(request, *args, **kwargs)
 
     def destroy(self, request, *args, **kwargs):
-        roles, _ = get_role_from_request(request)
-        if not has_role(roles, 'admin'):
-            return Response({'error': 'Reserve aux administrateurs'}, status=403)
+        roles, user_id = get_role_from_request(request)
+        if not roles or not user_id:
+            return Response({'error': 'Authentification requise'}, status=401)
+        instance = self.get_object()
+        if not self._can_manage(roles, user_id, instance):
+            return Response({'error': 'Acces non autorise'}, status=403)
         return super().destroy(request, *args, **kwargs)
 
 
