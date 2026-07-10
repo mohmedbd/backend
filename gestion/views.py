@@ -989,6 +989,33 @@ class SeanceQRViewSet(viewsets.ModelViewSet):
     queryset = SeanceQR.objects.all()
     serializer_class = SeanceQRSerializer
 
+    def get_queryset(self):
+        roles, user_id = get_role_from_request(self.request)
+        if not roles or not user_id:
+            return SeanceQR.objects.none()
+        if has_role(roles, 'admin'):
+            return SeanceQR.objects.all()
+        if has_role(roles, 'head_of_department'):
+            try:
+                user = User.objects.get(id=user_id)
+            except User.DoesNotExist:
+                return SeanceQR.objects.none()
+            hod = getattr(user, 'hod_profile', None)
+            if hod and hod.department_id:
+                return SeanceQR.objects.filter(
+                    planification__filiere__departement_id=hod.department_id
+                )
+            return SeanceQR.objects.none()
+        if has_role(roles, 'professor'):
+            return SeanceQR.objects.filter(planification__professor_id=user_id)
+        return SeanceQR.objects.none()
+
+    def list(self, request, *args, **kwargs):
+        roles, _ = get_role_from_request(request)
+        if not roles:
+            return Response([], status=200)
+        return super().list(request, *args, **kwargs)
+
     def destroy(self, request, *args, **kwargs):
         roles, user_id = get_role_from_request(request)
         if not has_role(roles, 'professor'):
@@ -1011,6 +1038,35 @@ class PresenceViewSet(viewsets.ModelViewSet):
     permission_classes = [AllowAny]
     queryset = Presence.objects.all()
     serializer_class = PresenceSerializer
+
+    def get_queryset(self):
+        roles, user_id = get_role_from_request(self.request)
+        if not roles or not user_id:
+            return Presence.objects.none()
+        if has_role(roles, 'admin'):
+            return Presence.objects.all()
+        if has_role(roles, 'head_of_department'):
+            try:
+                user = User.objects.get(id=user_id)
+            except User.DoesNotExist:
+                return Presence.objects.none()
+            hod = getattr(user, 'hod_profile', None)
+            if hod and hod.department_id:
+                return Presence.objects.filter(
+                    seance__planification__filiere__departement_id=hod.department_id
+                )
+            return Presence.objects.none()
+        if has_role(roles, 'professor'):
+            return Presence.objects.filter(
+                seance__planification__professor_id=user_id
+            )
+        return Presence.objects.none()
+
+    def list(self, request, *args, **kwargs):
+        roles, _ = get_role_from_request(request)
+        if not roles:
+            return Response([], status=200)
+        return super().list(request, *args, **kwargs)
 
     def destroy(self, request, *args, **kwargs):
         roles, user_id = get_role_from_request(request)
@@ -1318,9 +1374,6 @@ def export_seance_excel(request, seance_id):
     except Exception:
         return Response({'error': 'Token invalide'}, status=401)
 
-    if not has_role(roles, 'professor'):
-        return Response({'error': 'Acces reserve aux enseignants'}, status=403)
-
     try:
         seance = SeanceQR.objects.select_related(
             'planification__professor',
@@ -1330,8 +1383,22 @@ def export_seance_excel(request, seance_id):
     except SeanceQR.DoesNotExist:
         return Response({'error': 'Seance introuvable'}, status=404)
 
-    if seance.planification.professor.id != user_id:
-        return Response({'error': 'Acces non autorise a cette seance'}, status=403)
+    if has_role(roles, 'professor') and seance.planification.professor.id == user_id:
+        pass
+    elif has_role(roles, 'admin'):
+        pass
+    elif has_role(roles, 'head_of_department'):
+        try:
+            user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            return Response({'error': 'Acces non autorise'}, status=403)
+        hod = getattr(user, 'hod_profile', None)
+        if not hod or not hod.department_id:
+            return Response({'error': 'Acces non autorise'}, status=403)
+        if seance.planification.filiere.departement_id != hod.department_id:
+            return Response({'error': 'Seance hors de votre departement'}, status=403)
+    else:
+        return Response({'error': 'Acces non autorise'}, status=403)
 
     filiere        = seance.planification.filiere
     student_profiles = StudentProfile.objects.filter(
