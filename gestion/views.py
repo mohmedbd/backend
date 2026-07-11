@@ -1785,9 +1785,15 @@ def export_seance_excel(request, seance_id):
         return Response({'error': 'Acces non autorise'}, status=403)
 
     filiere        = seance.planification.filiere
+    module_ref     = seance.planification.module_ref
+
     student_profiles = StudentProfile.objects.filter(
         program=filiere
-    ).select_related('user').order_by('user__last_name', 'user__first_name')
+    )
+    if module_ref:
+        student_profiles = student_profiles.filter(modules=module_ref)
+
+    student_profiles = student_profiles.select_related('user').order_by('user__last_name', 'user__first_name')
 
     presents_ids = set(
         Presence.objects.filter(seance=seance)
