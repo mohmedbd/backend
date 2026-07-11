@@ -2213,7 +2213,7 @@ def importer_etudiants(request):
     header = [str(cell).strip().lower() if cell else '' for cell in rows[0]]
 
     col_map = {}
-    expected_cols = ['nom', 'prenom', 'email', 'password', 'cie', 'filiere_id']
+    expected_cols = ['nom', 'prenom', 'email', 'password', 'cie', 'filiere']
     for col in expected_cols:
         try:
             col_map[col] = header.index(col)
@@ -2241,9 +2241,9 @@ def importer_etudiants(request):
             email = str(row[col_map['email']]).strip().lower() if row[col_map['email']] else ''
             password = str(row[col_map['password']]) if row[col_map['password']] else ''
             cie = str(row[col_map['cie']]).strip() if row[col_map['cie']] else ''
-            filiere_id = row[col_map['filiere_id']]
+            filiere_value = row[col_map['filiere']]
 
-            if not nom or not prenom or not email or not password or not cie or filiere_id is None:
+            if not nom or not prenom or not email or not password or not cie or filiere_value is None:
                 errors.append({'row': i, 'message': 'Champs obligatoires manquants'})
                 continue
 
@@ -2255,12 +2255,12 @@ def importer_etudiants(request):
                 errors.append({'row': i, 'message': f'CNE déjà existant: {cie}'})
                 continue
 
-            filiere_str = str(filiere_id).strip()
+            filiere_str = str(filiere_value).strip()
             if filiere_str.isdigit():
                 filiere_id = int(filiere_str)
             else:
                 try:
-                    filiere = Filiere.objects.get(nom__iexact=filiere_str)
+                    filiere = Filiere.objects.get(nom_filiere__iexact=filiere_str)
                     filiere_id = filiere.id
                 except Filiere.DoesNotExist:
                     errors.append({'row': i, 'message': f'Filière introuvable: {filiere_str}'})
