@@ -2255,11 +2255,16 @@ def importer_etudiants(request):
                 errors.append({'row': i, 'message': f'CNE déjà existant: {cie}'})
                 continue
 
-            try:
-                filiere_id = int(filiere_id)
-            except (ValueError, TypeError):
-                errors.append({'row': i, 'message': f'filiere_id invalide: {filiere_id}'})
-                continue
+            filiere_str = str(filiere_id).strip()
+            if filiere_str.isdigit():
+                filiere_id = int(filiere_str)
+            else:
+                try:
+                    filiere = Filiere.objects.get(nom__iexact=filiere_str)
+                    filiere_id = filiere.id
+                except Filiere.DoesNotExist:
+                    errors.append({'row': i, 'message': f'Filière introuvable: {filiere_str}'})
+                    continue
 
             module_ids = []
             if col_map['module_ids'] is not None and row[col_map['module_ids']]:
