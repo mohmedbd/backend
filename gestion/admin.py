@@ -2,6 +2,7 @@ from django.contrib import admin
 from .models import (
     Departement,
     Filiere,
+    Module,
     Salle,
     Planification,
     SeanceQR,
@@ -13,6 +14,13 @@ from users.models import (
     AdminProfile, ProfessorProfile, HeadOfDepartmentProfile,
     ProgramManagerProfile, StudentProfile,
 )
+
+
+@admin.register(Module)
+class ModuleAdmin(admin.ModelAdmin):
+    list_display = ['id', 'nom_module']
+    search_fields = ['nom_module']
+    filter_horizontal = ['semestre']
 
 
 @admin.register(Departement)
