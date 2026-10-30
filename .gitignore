@@ -1,17 +1,25 @@
 # Environnement virtuel
 env/
 venv/
+.venv/
 
 # Base de données locale
 db.sqlite3
+*.sqlite3
 
 # Variables sensibles
 .env
+.env.*
+!.env.example
 
 # Python
 *.pyc
 *.pyo
 __pycache__/
+*.log/
+
+# Django
+staticfiles/
 
 # VS Code
 .vscode/
@@ -22,3 +30,6 @@ media/
 # Windows
 Thumbs.db
 desktop.ini
+
+# macOS
+.DS_Store
